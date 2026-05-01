@@ -129,6 +129,29 @@ class GoogleSheetsService {
 
     return createRes.ok;
   }
+
+  /**
+   * Static method to create a NEW spreadsheet file
+   */
+  static async createSpreadsheet(title, accessToken) {
+    const response = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        properties: { title }
+      })
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error?.message || 'Failed to create spreadsheet');
+    }
+
+    return await response.json();
+  }
 }
 
 export default GoogleSheetsService;

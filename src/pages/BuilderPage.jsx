@@ -1,21 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Plus, Trash2, Edit2, Loader2, GripVertical, Settings, Eye, Dices, Activity, Users, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, Edit2, Loader2, GripVertical, Settings, Eye, Dices, Activity, Users, ChevronDown, Database, Search, FileText } from 'lucide-react';
 import { useAuth } from '../contexts/GoogleAuthContext';
 import GoogleSheetsService from '../services/GoogleSheetsService';
 import SchemaService from '../services/SchemaService';
+import DriveService from '../services/DriveService';
 import { dbtSchema as defaultDbtSchema } from '../config/dbtSchema';
 import { generateMockData } from '../utils/mockDataGenerator';
 import JournalView from '../components/JournalView';
 import ClinicianView from '../components/ClinicianView';
 
 const PRIMITIVE_TYPES = [
-  { value: 'scale', label: 'Scale / Rating' },
-  { value: 'boolean', label: 'Checkbox (Yes/No)' },
-  { value: 'single_select', label: 'Single Choice (Dropdown)' },
-  { value: 'multi_select', label: 'Multiple Choice (Checkboxes)' },
-  { value: 'text_short', label: 'Short Text' },
-  { value: 'text_long', label: 'Long Text / Notes' },
+  { value: 'scale', label: 'Slider' },
+  { value: 'boolean', label: 'Yes/No' },
+  { value: 'single_select', label: 'Pick One' },
+  { value: 'multi_select', label: 'Pick Multiple' },
+  { value: 'text_short', label: 'Short Answer' },
+  { value: 'text_long', label: 'Long Text' },
   { value: 'number', label: 'Number Input' }
 ];
 
@@ -30,6 +31,8 @@ function BuilderPage() {
   
   const [schema, setSchema] = useState([]);
   const [activeField, setActiveField] = useState(null); // { sectionIndex, fieldIndex }
+  const [editingField, setEditingField] = useState(null); // { sectionIndex, fieldIndex } for inline rename
+  const [draggedItem, setDraggedItem] = useState(null); // { sectionIndex, fieldIndex }
 
   // Preview State
   const [mode, setMode] = useState('edit'); // 'edit' or 'preview'
@@ -37,6 +40,11 @@ function BuilderPage() {
   const [mockData, setMockData] = useState([]);
   const [mockForm, setMockForm] = useState({});
   const [mockEntryDate, setMockEntryDate] = useState(new Date().toISOString().split('T')[0]);
+  
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [newSheetName, setNewSheetName] = useState('My DBT Diary Card');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     if (accessToken && sheetId) {
@@ -61,12 +69,34 @@ function BuilderPage() {
     }
   };
 
-  const handleSave = async () => {
-    if (!sheetId) return;
+  const handleSearch = async (query) => {
+    if (!accessToken) return;
+    setSearching(true);
+    try {
+      const driveService = new DriveService(accessToken);
+      const files = await driveService.searchSpreadsheets(query);
+      setSearchResults(files);
+    } catch (err) {
+      console.error('Search error:', err);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSave = async (targetId = sheetId) => {
+    if (!targetId) {
+      setShowSaveModal(true);
+      handleSearch(''); // Load initial recent sheets
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      const sheetsService = new GoogleSheetsService(sheetId, accessToken);
+      const sheetsService = new GoogleSheetsService(targetId, accessToken);
+      // Ensure tabs exist first
+      await sheetsService.ensureTabExists('Config');
+      await sheetsService.ensureTabExists('Data');
+
       const flatConfig = SchemaService.flattenSchema(schema);
       await sheetsService.updateSheet('Config', flatConfig);
       
@@ -78,11 +108,24 @@ function BuilderPage() {
          await sheetsService.updateRow1('Data', dataHeaders);
       }
       
-      navigate(`/sheet/${sheetId}/journal`);
+      navigate(`/sheet/${targetId}/journal`);
     } catch (err) {
       console.error(err);
       setError("Failed to save schema: " + err.message);
     } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateAndSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const newSheet = await GoogleSheetsService.createSpreadsheet(newSheetName, accessToken);
+      await handleSave(newSheet.spreadsheetId);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to create sheet: " + err.message);
       setSaving(false);
     }
   };
@@ -95,7 +138,6 @@ function BuilderPage() {
     schema.forEach(section => {
       section.fields.forEach(f => {
         if (f.type === 'scale') {
-          // If mock randomize, we just randomize the form value anyway
           newForm[f.id] = Math.floor(Math.random() * ((f.config?.max || 5) - (f.config?.min || 0) + 1)) + (f.config?.min || 0);
         } else if (f.type === 'boolean') {
           newForm[f.id] = Math.random() > 0.5;
@@ -144,6 +186,14 @@ function BuilderPage() {
     if (updates.config !== undefined) field.config = { ...field.config, ...updates.config };
     setSchema(newSchema);
   };
+  const moveField = (fromSection, fromField, toSection, toField) => {
+    if (fromSection !== toSection) return; // Only reorder within same section for now
+    const newSchema = [...schema];
+    const section = newSchema[fromSection];
+    const [moved] = section.fields.splice(fromField, 1);
+    section.fields.splice(toField, 0, moved);
+    setSchema(newSchema);
+  };
 
   if (loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}><Loader2 className="spin" size={32} color="var(--accent-primary)" /></div>;
@@ -173,11 +223,6 @@ function BuilderPage() {
               <Link to="/" className="secondary" style={{ padding: '0.5rem 1rem', textDecoration: 'none', borderRadius: '2rem', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', fontSize: '0.875rem', fontWeight: 600 }}>
                 <ArrowLeft size={16} style={{ marginRight: '0.5rem' }} /> Back
               </Link>
-            )}
-            {sheetId && (
-              <button onClick={handleSave} disabled={saving} style={{ display: 'flex', alignItems: 'center', width: 'auto', padding: '0.5rem 1.5rem', borderRadius: '2rem', fontSize: '0.875rem' }}>
-                {saving ? <Loader2 size={18} className="spin" /> : <><Save size={18} style={{ marginRight: '0.5rem' }} /> Save</>}
-              </button>
             )}
           </div>
         </div>
@@ -244,7 +289,7 @@ function BuilderPage() {
           {/* LEFT COLUMN: EDITOR */}
           <div>
             <h3 style={{ marginBottom: '1rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>SCHEMA STRUCTURE</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {schema.map((section, sIdx) => (
                 <div key={sIdx} className="card" style={{ padding: '1rem' }}>
                   <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
@@ -273,22 +318,56 @@ function BuilderPage() {
                       return (
                         <div 
                           key={fIdx} 
+                          draggable
+                          onDragStart={() => setDraggedItem({ sectionIndex: sIdx, fieldIndex: fIdx })}
+                          onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.borderTop = '2px solid var(--accent-primary)'; }}
+                          onDragLeave={(e) => { e.currentTarget.style.borderTop = '1px solid var(--border-color)'; }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.currentTarget.style.borderTop = '1px solid var(--border-color)';
+                            if (draggedItem) moveField(draggedItem.sectionIndex, draggedItem.fieldIndex, sIdx, fIdx);
+                            setDraggedItem(null);
+                          }}
                           style={{ 
                             display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
-                            padding: '0.5rem', background: isActive ? '#f0f9ff' : 'white', 
+                            padding: '0.75rem 1rem', background: isActive ? '#f0f9ff' : 'white', 
                             border: `1px solid ${isActive ? 'var(--accent-primary)' : 'var(--border-color)'}`,
-                            borderRadius: '0.5rem', cursor: 'pointer'
+                            borderRadius: '0.75rem', cursor: 'grab', transition: 'all 0.2s'
                           }}
                           onClick={() => setActiveField({ sectionIndex: sIdx, fieldIndex: fIdx })}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <GripVertical size={16} color="var(--text-secondary)" />
-                            <span style={{ fontWeight: isActive ? 600 : 400 }}>{field.label}</span>
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', background: '#e2e8f0', padding: '0.1rem 0.4rem', borderRadius: '1rem' }}>
-                              {field.type}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1 }}>
+                            <GripVertical size={18} color="var(--text-secondary)" style={{ cursor: 'grab' }} />
+                            {editingField?.sectionIndex === sIdx && editingField?.fieldIndex === fIdx ? (
+                              <input 
+                                autoFocus
+                                type="text"
+                                value={field.label}
+                                onChange={(e) => updateActiveField({ label: e.target.value })}
+                                onBlur={() => setEditingField(null)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') setEditingField(null); }}
+                                style={{ flex: 1, padding: '0.25rem 0.5rem', fontSize: '0.9375rem' }}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            ) : (
+                              <span 
+                                onDoubleClick={(e) => { e.stopPropagation(); setEditingField({ sectionIndex: sIdx, fieldIndex: fIdx }); }}
+                                style={{ fontWeight: 600, fontSize: '0.9375rem', color: isActive ? 'var(--accent-purple)' : 'inherit' }}
+                              >
+                                {field.label}
+                              </span>
+                            )}
+                            <span style={{ fontSize: '0.75rem', color: 'var(--accent-purple)', background: 'var(--accent-purple-light)', padding: '0.1rem 0.6rem', borderRadius: '1rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                              {PRIMITIVE_TYPES.find(t => t.value === field.type)?.label || field.type}
                             </span>
                           </div>
-                          <Trash2 size={16} color="var(--text-secondary)" onClick={(e) => { e.stopPropagation(); deleteField(sIdx, fIdx); }} style={{cursor: 'pointer'}} />
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); deleteField(sIdx, fIdx); }} 
+                            className="secondary"
+                            style={{ width: 'auto', padding: '0.4rem', border: 'none', background: 'transparent' }}
+                          >
+                            <Trash2 size={16} color="var(--text-secondary)" />
+                          </button>
                         </div>
                       );
                     })}
@@ -302,13 +381,28 @@ function BuilderPage() {
               <button onClick={addSection} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', width: 'auto', alignSelf: 'flex-start' }}>
                 <Plus size={18} /> Add New Section
               </button>
+
+              <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '0.5rem 0' }} />
+
+              <button 
+                onClick={() => handleSave()} 
+                disabled={saving} 
+                style={{ 
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                  width: '100%', padding: '1rem', borderRadius: '1.25rem', 
+                  fontSize: '1rem', fontWeight: 800,
+                  boxShadow: '0 8px 15px -3px rgba(14, 165, 233, 0.15)'
+                }}
+              >
+                {saving ? <Loader2 size={18} className="spin" /> : <><Save size={20} style={{ marginRight: '0.75rem' }} /> Save Configuration</>}
+              </button>
             </div>
           </div>
 
           {/* RIGHT COLUMN: CONFIG & (DEPRECATED LOCAL PREVIEW) */}
-          <div className="desktop-settings">
+          <div className="desktop-settings" style={{ position: 'sticky', top: '2rem', height: 'fit-content' }}>
+            <h3 style={{ marginBottom: '1rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>FIELD SETTINGS</h3>
             <div className="card">
-              <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>FIELD SETTINGS</h3>
               {!currentField ? (
                 <div className="empty-state">Select a field on the left to edit its settings.</div>
               ) : (
@@ -330,6 +424,73 @@ function BuilderPage() {
         </div>
         {currentField && <FieldSettingsContent currentField={currentField} updateActiveField={updateActiveField} />}
       </div>
+
+      {/* SAVE TO SHEET MODAL */}
+      {showSaveModal && (
+        <div className="modal-overlay" onClick={() => setShowSaveModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <h2 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Database size={24} color="var(--accent-primary)" /> Save to Google Sheet
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+              To save your custom diary card, you need to connect it to a Google Sheet.
+            </p>
+
+            <div style={{ marginBottom: '2rem' }}>
+              <label style={{ display: 'block', fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.5rem' }}>Create a New Sheet</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input 
+                  type="text" 
+                  value={newSheetName} 
+                  onChange={e => setNewSheetName(e.target.value)} 
+                  placeholder="Sheet Name"
+                  style={{ flex: 1 }}
+                />
+                <button onClick={handleCreateAndSave} disabled={saving} style={{ width: 'auto' }}>
+                  {saving ? <Loader2 className="spin" size={18} /> : 'Create & Save'}
+                </button>
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
+              <label style={{ display: 'block', fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.5rem' }}>Or Select Existing Sheet</label>
+              <div style={{ position: 'relative', marginBottom: '1rem' }}>
+                <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
+                <input 
+                  type="text" 
+                  placeholder="Search spreadsheets..." 
+                  onChange={e => {
+                     const val = e.target.value;
+                     handleSearch(val);
+                  }}
+                  style={{ paddingLeft: '40px' }}
+                />
+                {searching && <Loader2 className="spin" size={18} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--accent-primary)' }} />}
+              </div>
+
+              <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '1rem', padding: '0.5rem' }}>
+                {searchResults.length === 0 && !searching && <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No sheets found</div>}
+                {searchResults.map(file => (
+                  <div 
+                    key={file.id} 
+                    onClick={() => handleSave(file.id)}
+                    style={{ padding: '0.75rem', borderRadius: '0.75rem', cursor: 'pointer', transition: 'background 0.2s', display: 'flex', alignItems: 'center', gap: '0.75rem' }}
+                    className="form-row"
+                  >
+                    <FileText size={18} color="var(--accent-primary)" />
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontWeight: 500, fontSize: '0.9rem' }}>{file.name}</span>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Modified: {new Date(file.modifiedTime).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <button onClick={() => setShowSaveModal(false)} className="secondary" style={{ marginTop: '1.5rem', width: '100%' }}>Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -374,17 +535,58 @@ function FieldSettingsContent({ currentField, updateActiveField }) {
 
       {(currentField.type === 'single_select' || currentField.type === 'multi_select') && (
         <div className="form-group">
-          <label>Options (Comma separated)</label>
-          <textarea 
-            rows="3" 
-            value={(currentField.config?.options || []).join(', ')} 
-            onChange={e => {
-              const opts = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
-              updateActiveField({ config: { options: opts } });
-            }}
-            placeholder="E.g. Good, Fair, Poor"
-            style={{ borderRadius: '1rem' }}
-          />
+          <label>Options</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              {(currentField.config?.options || []).map((opt, i) => (
+                <div key={i} style={{ 
+                  display: 'flex', alignItems: 'center', gap: '0.4rem', 
+                  background: 'var(--accent-purple-light)', color: 'var(--accent-purple)', 
+                  padding: '0.4rem 0.8rem', borderRadius: '2rem', fontSize: '0.875rem', fontWeight: 600
+                }}>
+                  {opt}
+                  <button 
+                    onClick={() => {
+                      const newOpts = [...(currentField.config.options)];
+                      newOpts.splice(i, 1);
+                      updateActiveField({ config: { options: newOpts } });
+                    }}
+                    style={{ background: 'transparent', border: 'none', padding: 0, width: 'auto', display: 'flex', color: 'var(--accent-purple)', cursor: 'pointer' }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input 
+                type="text" 
+                placeholder="Add option..." 
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.target.value.trim()) {
+                    const newOpts = [...(currentField.config?.options || []), e.target.value.trim()];
+                    updateActiveField({ config: { options: newOpts } });
+                    e.target.value = '';
+                  }
+                }}
+                style={{ flex: 1, borderRadius: '2rem', padding: '0.5rem 1rem' }}
+              />
+              <button 
+                onClick={(e) => {
+                  const input = e.currentTarget.previousSibling;
+                  if (input.value.trim()) {
+                    const newOpts = [...(currentField.config?.options || []), input.value.trim()];
+                    updateActiveField({ config: { options: newOpts } });
+                    input.value = '';
+                  }
+                }}
+                className="secondary"
+                style={{ width: 'auto', borderRadius: '2rem', padding: '0.5rem 1rem' }}
+              >
+                Add
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

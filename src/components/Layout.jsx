@@ -17,7 +17,11 @@ function Layout() {
         {accessToken && (
           <div className="header-actions">
             {user && <img src={user.picture} alt={user.name} className="user-avatar" />}
-            <button onClick={logout} className="secondary" style={{ width: 'auto', padding: '0.6rem', borderRadius: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <button 
+              onClick={logout} 
+              className="secondary" 
+              style={{ width: 'auto', padding: '0.6rem', borderRadius: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
               <LogOut size={18} />
             </button>
           </div>
