@@ -32,9 +32,10 @@ class SchemaService {
         console.warn(`Failed to parse ConfigJSON for field ${row.Label}`, e);
       }
 
+      const fieldLabel = (row.Label || '').trim();
       sectionsMap[sectionTitle].fields.push({
-        id: row.Label,
-        label: row.Label,
+        id: fieldLabel,
+        label: fieldLabel,
         type: row.Type || 'text_short',
         config: config
       });

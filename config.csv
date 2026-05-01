@@ -1,0 +1,25 @@
+Section,Label,Type,ConfigJSON
+EMOTIONS,Anger,scale,"{""min"":0,""max"":5}"
+EMOTIONS,Fear,scale,"{""min"":0,""max"":5}"
+EMOTIONS,Happiness,scale,"{""min"":0,""max"":5}"
+EMOTIONS,Anxiety,scale,"{""min"":0,""max"":5}"
+EMOTIONS,Sadness,scale,"{""min"":0,""max"":5}"
+EMOTIONS,Shame,scale,"{""min"":0,""max"":5}"
+EMOTIONS,Misery,scale,"{""min"":0,""max"":5}"
+URGES,Suicidal Urges (Intensity),scale,"{""min"":0,""max"":5}"
+URGES,Suicidal Urges (Duration),scale,"{""min"":0,""max"":5}"
+URGES,Self-Harm Urges (Intensity),scale,"{""min"":0,""max"":5}"
+URGES,Self-Harm Urges (Duration),scale,"{""min"":0,""max"":5}"
+URGES,Urge to Quit Therapy,scale,"{""min"":0,""max"":5}"
+URGES,Food Restriction Urges (Intensity),scale,"{""min"":0,""max"":5}"
+URGES,Food Restriction Urges (Duration),scale,"{""min"":0,""max"":5}"
+URGES,Binging Urges (Intensity),scale,"{""min"":0,""max"":5}"
+URGES,Binging Urges (Duration),scale,"{""min"":0,""max"":5}"
+Body Stuff,Body Feelings (5 = Neutral),scale,"{""min"":0,""max"":10,""start"":5}"
+Behaviors,Suicidal Behavior,boolean,{}
+Behaviors,Self-Harm Behavior,boolean,{}
+Behaviors,Skipping a Meal,boolean,{}
+Behaviors,Intake Restriction,boolean,{}
+Behaviors,Binging,boolean,{}
+Behaviors,Other,text_short,{}
+NOTES,Notes,text_long,{}

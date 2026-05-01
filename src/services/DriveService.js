@@ -34,6 +34,41 @@ class DriveService {
       throw err;
     }
   }
+
+  /**
+   * Shares a file with a specific email address.
+   * @param {string} fileId - The ID of the file to share.
+   * @param {string} email - The email address to share with.
+   * @param {string} role - The role (reader, writer, commenter). Defaults to 'reader'.
+   */
+  async shareFile(fileId, email, role = 'reader') {
+    const url = `${this.baseUrl}/${fileId}/permissions`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          role: role,
+          type: 'user',
+          emailAddress: email,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Failed to share file');
+      }
+
+      return await response.json();
+    } catch (err) {
+      console.error('DriveService Share Error:', err);
+      throw err;
+    }
+  }
 }
 
 export default DriveService;

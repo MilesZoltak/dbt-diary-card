@@ -33,7 +33,11 @@ class GoogleSheetsService {
       
       return rows.map(row => {
         let obj = {};
-        headers.forEach((header, i) => obj[header] = row[i]);
+        headers.forEach((header, i) => {
+          if (header) {
+            obj[header.trim()] = row[i];
+          }
+        });
         return obj;
       });
     } catch (error) {

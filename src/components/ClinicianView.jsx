@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Activity, Calendar, ClipboardList, ChevronDown, MessageSquare, X } from 'lucide-react';
+import { normalizeDate } from '../utils/dateUtils';
 
 function ClinicianView({ schema, patientData }) {
   const [startDate, setStartDate] = useState(() => {
@@ -102,7 +103,7 @@ function ClinicianView({ schema, patientData }) {
                               {field.label}
                             </th>
                             {dates.map(date => {
-                              const row = patientData.find(d => d.Date === date);
+                              const row = patientData.find(d => normalizeDate(d.Date) === date);
                               const val = row?.[field.id];
                               const bgColor = getHeatmapColor(val, field.type, field.config);
                               const textColor = getTextColor(val, field.type, field.config);
@@ -120,7 +121,7 @@ function ClinicianView({ schema, patientData }) {
                                           <MessageSquare size={18} color="var(--accent-purple)" />
                                         </button>
                                       ) : (
-                                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', opacity: 0.5 }}>0</div>
+                                        <div style={{ minHeight: '2.5rem' }}></div>
                                       )
                                     ) : (
                                       <div className="heatmap-cell" style={{ 
@@ -134,8 +135,8 @@ function ClinicianView({ schema, patientData }) {
                                         justifyContent: 'center'
                                       }}>
                                         {val !== undefined && val !== null && val !== '' ? (
-                                          field.type === 'boolean' ? (val ? 'Y' : 'N') : val
-                                        ) : '0'}
+                                          field.type === 'boolean' ? (val === true || val === 'TRUE' || val === 'true' || val === 'Yes' || val === 'Y' ? 'Y' : 'N') : val
+                                        ) : ''}
                                       </div>
                                     )}
                                   </div>

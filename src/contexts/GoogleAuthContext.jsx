@@ -14,7 +14,7 @@ export const AuthProvider = ({ children }) => {
       // Fetch user profile info if needed
       fetchUserProfile(tokenResponse.access_token);
     },
-    scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.metadata.readonly',
+    scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive',
   });
 
   const logout = () => {

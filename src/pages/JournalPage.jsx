@@ -6,6 +6,7 @@ import GoogleSheetsService from '../services/GoogleSheetsService';
 import SchemaService from '../services/SchemaService';
 import { dbtSchema as defaultDbtSchema } from '../config/dbtSchema';
 import JournalView from '../components/JournalView';
+import { normalizeDate } from '../utils/dateUtils';
 
 function JournalPage() {
   const { sheetId } = useParams();
@@ -25,6 +26,34 @@ function JournalPage() {
       loadSheetData();
     }
   }, [accessToken, sheetId]);
+
+  // Load existing data into form when date changes
+  useEffect(() => {
+    if (patientData.length > 0 && schema.length > 0) {
+      const entry = patientData.find(d => normalizeDate(d.Date) === entryDate);
+      
+      if (entry) {
+        const loadedForm = {};
+        schema.forEach(section => {
+          section.fields.forEach(f => {
+            let val = entry[f.label];
+            if (f.type === 'scale') {
+              const parsed = parseInt(val);
+              loadedForm[f.id] = isNaN(parsed) ? (f.config?.start ?? f.config?.min ?? 0) : parsed;
+            }
+            else if (f.type === 'boolean') loadedForm[f.id] = val === 'Y' || val === 'Yes' || val === 'TRUE' || val === true;
+            else if (f.type === 'multi_select') loadedForm[f.id] = val ? val.split(', ').filter(Boolean) : [];
+            else loadedForm[f.id] = val || '';
+          });
+        });
+        setForm(loadedForm);
+      } else {
+        resetForm();
+      }
+    } else {
+      resetForm();
+    }
+  }, [entryDate, patientData, schema]);
 
   const loadSheetData = async () => {
     setLoading(true);
@@ -81,7 +110,7 @@ function JournalPage() {
       schema.forEach(section => {
         section.fields.forEach(f => {
           let value = form[f.id];
-          if (f.type === 'boolean') value = value ? 'Yes' : 'No';
+          if (f.type === 'boolean') value = value ? 'Y' : 'N';
           if (f.type === 'multi_select') value = Array.isArray(value) ? value.join(', ') : '';
           rowData[f.label] = value;
         });

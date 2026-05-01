@@ -1,6 +1,7 @@
 import React from 'react';
 import { Settings, ClipboardList, Loader2, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { normalizeDate } from '../utils/dateUtils';
 
 function JournalView({ 
   schema, 
@@ -203,7 +204,7 @@ function JournalView({
             const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
             const dayNum = dateObj.getDate();
             const isSelected = entryDate === dStr;
-            const hasData = patientData.some(d => d.Date === dStr);
+            const hasData = patientData.some(d => normalizeDate(d.Date) === dStr);
 
             return (
               <div 
