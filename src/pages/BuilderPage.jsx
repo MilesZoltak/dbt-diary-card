@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Plus, Trash2, Edit2, Loader2, GripVertical, Settings, Eye, Dices, Activity, Users } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, Edit2, Loader2, GripVertical, Settings, Eye, Dices, Activity, Users, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/GoogleAuthContext';
 import GoogleSheetsService from '../services/GoogleSheetsService';
 import SchemaService from '../services/SchemaService';
@@ -155,37 +155,40 @@ function BuilderPage() {
     <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
       
       {/* HEADER */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-          <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Settings size={24} color="var(--accent-primary)"/> Schema Builder
-          </h2>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginBottom: '2.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+          <div>
+            <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.75rem', fontWeight: 800 }}>
+              <Settings size={28} color="var(--accent-primary)"/> Schema Builder
+            </h2>
+            <p style={{ color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', fontSize: '0.875rem' }}>Customize your diary structure</p>
+          </div>
 
-          <div className="toggle-group" style={{ margin: 0 }}>
-            <button className={`toggle-btn ${mode === 'edit' ? 'active' : ''}`} onClick={() => setMode('edit')} style={{ padding: '0.5rem 1rem' }}>
-              <Edit2 size={16} style={{ display: 'inline', marginRight: '0.5rem', verticalAlign: 'text-bottom' }} /> Edit Mode
-            </button>
-            <button className={`toggle-btn ${mode === 'preview' ? 'active' : ''}`} onClick={() => { setMode('preview'); if(mockData.length===0) handleRandomize(); }} style={{ padding: '0.5rem 1rem' }}>
-              <Eye size={16} style={{ display: 'inline', marginRight: '0.5rem', verticalAlign: 'text-bottom' }} /> Full Preview
-            </button>
+          <div style={{ display: 'flex', gap: '0.75rem' }}>
+            {sheetId ? (
+              <Link to={`/sheet/${sheetId}/journal`} className="secondary" style={{ padding: '0.5rem 1rem', textDecoration: 'none', borderRadius: '2rem', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', fontSize: '0.875rem', fontWeight: 600 }}>
+                <ArrowLeft size={16} style={{ marginRight: '0.5rem' }} /> Back
+              </Link>
+            ) : (
+              <Link to="/" className="secondary" style={{ padding: '0.5rem 1rem', textDecoration: 'none', borderRadius: '2rem', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', fontSize: '0.875rem', fontWeight: 600 }}>
+                <ArrowLeft size={16} style={{ marginRight: '0.5rem' }} /> Back
+              </Link>
+            )}
+            {sheetId && (
+              <button onClick={handleSave} disabled={saving} style={{ display: 'flex', alignItems: 'center', width: 'auto', padding: '0.5rem 1.5rem', borderRadius: '2rem', fontSize: '0.875rem' }}>
+                {saving ? <Loader2 size={18} className="spin" /> : <><Save size={18} style={{ marginRight: '0.5rem' }} /> Save</>}
+              </button>
+            )}
           </div>
         </div>
-        
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          {sheetId ? (
-            <Link to={`/sheet/${sheetId}/journal`} className="secondary" style={{ padding: '0.5rem 1rem', textDecoration: 'none', borderRadius: '0.5rem', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center' }}>
-              <ArrowLeft size={16} style={{ marginRight: '0.5rem' }} /> Cancel
-            </Link>
-          ) : (
-            <Link to="/" className="secondary" style={{ padding: '0.5rem 1rem', textDecoration: 'none', borderRadius: '0.5rem', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center' }}>
-              <ArrowLeft size={16} style={{ marginRight: '0.5rem' }} /> Back
-            </Link>
-          )}
-          {sheetId && (
-            <button onClick={handleSave} disabled={saving} style={{ display: 'flex', alignItems: 'center', width: 'auto', padding: '0.5rem 1.5rem' }}>
-              {saving ? <Loader2 size={18} className="spin" /> : <><Save size={18} style={{ marginRight: '0.5rem' }} /> Save & Apply</>}
-            </button>
-          )}
+
+        <div className="toggle-group" style={{ margin: 0, alignSelf: 'center' }}>
+          <button className={`toggle-btn ${mode === 'edit' ? 'active' : ''}`} onClick={() => setMode('edit')}>
+            <Edit2 size={16} style={{ display: 'inline', marginRight: '0.5rem', verticalAlign: 'text-bottom' }} /> Edit Mode
+          </button>
+          <button className={`toggle-btn ${mode === 'preview' ? 'active' : ''}`} onClick={() => { setMode('preview'); if(mockData.length===0) handleRandomize(); }}>
+            <Eye size={16} style={{ display: 'inline', marginRight: '0.5rem', verticalAlign: 'text-bottom' }} /> Full Preview
+          </button>
         </div>
       </div>
 
@@ -198,18 +201,18 @@ function BuilderPage() {
       {/* FULL PREVIEW MODE */}
       {mode === 'preview' && (
         <div style={{ animation: 'fadeIn 0.3s ease-out' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: '#f8fafc', padding: '1rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)' }}>
-            <div className="toggle-group" style={{ margin: 0 }}>
-              <button className={`toggle-btn ${previewTab === 'journal' ? 'active' : ''}`} onClick={() => setPreviewTab('journal')}>
-                <Activity size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '0.5rem' }} /> Journal Preview
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div className="toggle-group" style={{ margin: 0, width: '100%' }}>
+              <button className={`toggle-btn ${previewTab === 'journal' ? 'active' : ''}`} onClick={() => setPreviewTab('journal')} style={{ flex: 1, padding: '0.6rem' }}>
+                <Activity size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '0.4rem' }} /> Journal
               </button>
-              <button className={`toggle-btn ${previewTab === 'clinician' ? 'active' : ''}`} onClick={() => setPreviewTab('clinician')}>
-                <Users size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '0.5rem' }} /> Clinician Preview
+              <button className={`toggle-btn ${previewTab === 'clinician' ? 'active' : ''}`} onClick={() => setPreviewTab('clinician')} style={{ flex: 1, padding: '0.6rem' }}>
+                <Users size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '0.4rem' }} /> Clinician
               </button>
             </div>
             
-            <button onClick={handleRandomize} className="secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: 'auto', background: 'white' }}>
-              <Dices size={18} color="var(--accent-purple)" /> Randomize Mock Data
+            <button onClick={handleRandomize} className="secondary" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', width: '100%', background: 'rgba(255,255,255,0.5)', padding: '0.6rem', fontSize: '0.875rem' }}>
+              <Dices size={16} color="var(--accent-purple)" /> Randomize Data
             </button>
           </div>
 
@@ -236,7 +239,7 @@ function BuilderPage() {
 
       {/* EDIT MODE */}
       {mode === 'edit' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', alignItems: 'start', animation: 'fadeIn 0.3s ease-out' }}>
+        <div className="grid" style={{ animation: 'fadeIn 0.3s ease-out' }}>
           
           {/* LEFT COLUMN: EDITOR */}
           <div>
@@ -303,66 +306,137 @@ function BuilderPage() {
           </div>
 
           {/* RIGHT COLUMN: CONFIG & (DEPRECATED LOCAL PREVIEW) */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', position: 'sticky', top: '2rem' }}>
-            
+          <div className="desktop-settings">
             <div className="card">
               <h3 style={{ marginTop: 0, marginBottom: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>FIELD SETTINGS</h3>
               {!currentField ? (
                 <div className="empty-state">Select a field on the left to edit its settings.</div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div className="form-group">
-                    <label>Field Label (Column Name)</label>
-                    <input type="text" value={currentField.label} onChange={e => updateActiveField({ label: e.target.value })} />
-                  </div>
-                  
-                  <div className="form-group">
-                    <label>Component Type</label>
-                    <select value={currentField.type} onChange={e => updateActiveField({ type: e.target.value })}>
-                      {PRIMITIVE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
-                  </div>
-
-                  {/* Conditional Config Inputs */}
-                  {currentField.type === 'scale' && (
-                    <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                      <div style={{ display: 'flex', gap: '1rem' }}>
-                        <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                          <label style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Min Value</label>
-                          <input type="number" value={currentField.config?.min ?? 0} onChange={e => updateActiveField({ config: { min: parseInt(e.target.value) } })} style={{ padding: '0.5rem' }} />
-                        </div>
-                        <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                          <label style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Max Value</label>
-                          <input type="number" value={currentField.config?.max ?? 5} onChange={e => updateActiveField({ config: { max: parseInt(e.target.value) } })} style={{ padding: '0.5rem' }} />
-                        </div>
-                        <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                          <label style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Default Start</label>
-                          <input type="number" value={currentField.config?.start ?? ''} onChange={e => updateActiveField({ config: { start: e.target.value ? parseInt(e.target.value) : undefined } })} style={{ padding: '0.5rem' }} placeholder="Min" />
-                        </div>
-                      </div>
-                      
-                    </div>
-                  )}
-
-                  {(currentField.type === 'single_select' || currentField.type === 'multi_select') && (
-                    <div className="form-group">
-                      <label>Options (Comma separated)</label>
-                      <textarea 
-                        rows="3" 
-                        value={(currentField.config?.options || []).join(', ')} 
-                        onChange={e => {
-                          const opts = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
-                          updateActiveField({ config: { options: opts } });
-                        }}
-                        placeholder="E.g. Good, Fair, Poor"
-                      />
-                    </div>
-                  )}
-                </div>
+                <FieldSettingsContent currentField={currentField} updateActiveField={updateActiveField} />
               )}
             </div>
-
           </div>
+        </div>
+      )}
+
+      {/* MOBILE SETTINGS DRAWER */}
+      <div className={`drawer-overlay ${activeField ? 'active' : ''}`} onClick={() => setActiveField(null)} />
+      <div className={`drawer-content ${activeField ? 'active' : ''}`}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <h3 style={{ margin: 0, fontSize: '1.125rem' }}>Field Settings</h3>
+          <button onClick={() => setActiveField(null)} className="secondary" style={{ width: 'auto', padding: '0.5rem 1rem', borderRadius: '2rem' }}>
+            Done
+          </button>
+        </div>
+        {currentField && <FieldSettingsContent currentField={currentField} updateActiveField={updateActiveField} />}
+      </div>
+    </div>
+  );
+}
+
+// Sub-component to avoid code duplication
+function FieldSettingsContent({ currentField, updateActiveField }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      <div className="form-group">
+        <label>Field Label (Column Name)</label>
+        <input type="text" value={currentField.label} onChange={e => updateActiveField({ label: e.target.value })} />
+      </div>
+      
+      <div className="form-group">
+        <label>Component Type</label>
+        <CustomSelect 
+          value={currentField.type} 
+          options={PRIMITIVE_TYPES} 
+          onChange={val => updateActiveField({ type: val })} 
+        />
+      </div>
+
+      {/* Conditional Config Inputs */}
+      {currentField.type === 'scale' && (
+        <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '1rem', border: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem' }}>
+            <div className="form-group" style={{ margin: 0, minWidth: 0 }}>
+              <label style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Min</label>
+              <input type="number" value={currentField.config?.min ?? 0} onChange={e => updateActiveField({ config: { min: parseInt(e.target.value) } })} style={{ padding: '0.5rem 0.2rem', textAlign: 'center', fontSize: '0.9rem' }} />
+            </div>
+            <div className="form-group" style={{ margin: 0, minWidth: 0 }}>
+              <label style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Max</label>
+              <input type="number" value={currentField.config?.max ?? 5} onChange={e => updateActiveField({ config: { max: parseInt(e.target.value) } })} style={{ padding: '0.5rem 0.2rem', textAlign: 'center', fontSize: '0.9rem' }} />
+            </div>
+            <div className="form-group" style={{ margin: 0, minWidth: 0 }}>
+              <label style={{ fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Start</label>
+              <input type="number" value={currentField.config?.start ?? ''} onChange={e => updateActiveField({ config: { start: e.target.value ? parseInt(e.target.value) : undefined } })} style={{ padding: '0.5rem 0.2rem', textAlign: 'center', fontSize: '0.9rem' }} placeholder="Min" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(currentField.type === 'single_select' || currentField.type === 'multi_select') && (
+        <div className="form-group">
+          <label>Options (Comma separated)</label>
+          <textarea 
+            rows="3" 
+            value={(currentField.config?.options || []).join(', ')} 
+            onChange={e => {
+              const opts = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+              updateActiveField({ config: { options: opts } });
+            }}
+            placeholder="E.g. Good, Fair, Poor"
+            style={{ borderRadius: '1rem' }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Custom Select Component for a premium feel and better mobile behavior
+function CustomSelect({ value, options, onChange }) {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const containerRef = React.useRef(null);
+  
+  const selectedOption = options.find(opt => opt.value === value);
+
+  React.useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="custom-select-container" ref={containerRef}>
+      <button 
+        type="button"
+        className={`custom-select-button ${isOpen ? 'active' : ''}`}
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span>{selectedOption ? selectedOption.label : 'Select...'}</span>
+        <ChevronDown size={18} style={{ 
+          transform: isOpen ? 'rotate(180deg)' : 'none', 
+          transition: 'transform 0.3s',
+          color: 'var(--text-secondary)'
+        }} />
+      </button>
+      
+      {isOpen && (
+        <div className="custom-select-menu">
+          {options.map(opt => (
+            <div 
+              key={opt.value} 
+              className={`custom-select-item ${opt.value === value ? 'selected' : ''}`}
+              onClick={() => {
+                onChange(opt.value);
+                setIsOpen(false);
+              }}
+            >
+              {opt.label}
+            </div>
+          ))}
         </div>
       )}
     </div>

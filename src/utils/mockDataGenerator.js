@@ -13,7 +13,7 @@ export function generateMockData(schema, days = 7) {
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    const dateString = d.toLocaleDateString();
+    const dateString = d.toISOString().split('T')[0];
     
     const row = { 'Date': dateString };
     
@@ -25,15 +25,15 @@ export function generateMockData(schema, days = 7) {
           case 'scale':
             const min = field.config?.min ?? 0;
             const max = field.config?.max ?? 5;
-            // 80% chance to have a value
-            if (Math.random() > 0.2) {
+            // 90% chance to have a value for mock data
+            if (Math.random() > 0.1) {
               value = Math.floor(Math.random() * (max - min + 1)) + min;
             }
             break;
             
           case 'boolean':
             if (Math.random() > 0.2) {
-              value = Math.random() > 0.5 ? 'Yes' : 'No';
+              value = Math.random() > 0.5;
             }
             break;
             
@@ -76,7 +76,7 @@ export function generateMockData(schema, days = 7) {
             break;
         }
         
-        row[field.label] = value;
+        row[field.id] = value;
       });
     });
     

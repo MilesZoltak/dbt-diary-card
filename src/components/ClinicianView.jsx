@@ -1,175 +1,181 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Users, Calendar } from 'lucide-react';
+import React, { useState } from 'react';
+import { Activity, Calendar, ClipboardList, ChevronDown, MessageSquare, X } from 'lucide-react';
 
 function ClinicianView({ schema, patientData }) {
-  // Date range state
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
-    d.setDate(d.getDate() - 6); // Default to last 7 days (including today)
+    d.setDate(d.getDate() - 6);
     return d.toISOString().split('T')[0];
   });
-  const [endDate, setEndDate] = useState(() => {
-    return new Date().toISOString().split('T')[0];
-  });
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [expandedSections, setExpandedSections] = useState([0]); 
+  const [selectedNote, setSelectedNote] = useState(null); // { label, date, text }
 
-  const headerRef = useRef(null);
-  const [headerHeight, setHeaderHeight] = useState(40);
+  const toggleSection = (idx) => {
+    setExpandedSections(prev => 
+      prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
+    );
+  };
 
-  useEffect(() => {
-    if (headerRef.current) {
-      setHeaderHeight(headerRef.current.getBoundingClientRect().height);
-    }
-  });
+  const dates = [];
+  let curr = new Date(startDate + 'T00:00:00');
+  const end = new Date(endDate + 'T00:00:00');
+  while (curr <= end) {
+    dates.push(curr.toISOString().split('T')[0]);
+    curr.setDate(curr.getDate() + 1);
+  }
 
-  // Generate array of all dates in the range
-  const dateRangeArray = useMemo(() => {
-    if (!startDate || !endDate) return [];
-    const start = new Date(startDate + 'T12:00:00');
-    const end = new Date(endDate + 'T12:00:00');
+  const getHeatmapColor = (value, type, config) => {
+    if (value === undefined || value === null || value === '') return 'transparent';
+    if (type !== 'scale') return 'rgba(226, 232, 240, 0.5)';
     
-    const dates = [];
-    let current = new Date(start);
-    while (current <= end) {
-      dates.push(current.toLocaleDateString());
-      current.setDate(current.getDate() + 1);
-    }
-    return dates;
-  }, [startDate, endDate]);
+    const min = config?.min ?? 0;
+    const max = config?.max ?? 5;
+    const percent = (value - min) / (max - min);
+    
+    // Scale from light purple to deep purple
+    return `rgba(124, 58, 237, ${0.1 + percent * 0.8})`;
+  };
 
-  // Map data by date for O(1) lookup
-  const dataByDate = useMemo(() => {
-    const map = {};
-    patientData.forEach(row => {
-      map[row['Date']] = row; 
-    });
-    return map;
-  }, [patientData]);
+  const getTextColor = (value, type, config) => {
+    if (value === undefined || value === null || value === '') return 'var(--text-secondary)';
+    if (type !== 'scale') return 'var(--text-primary)';
+    
+    const min = config?.min ?? 0;
+    const max = config?.max ?? 5;
+    const percent = (value - min) / (max - min);
+    return percent > 0.6 ? 'white' : 'var(--text-primary)';
+  };
 
   return (
-    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-      <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-        <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Users size={20} color="var(--accent-primary)" /> Weekly Dashboard
-        </h2>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: '#f8fafc', padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)' }}>
+    <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+      <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '1.5rem', fontWeight: 800 }}>
+            <Activity size={28} color="var(--accent-primary)" /> Weekly Dashboard
+          </h2>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', background: 'rgba(255, 255, 255, 0.5)', padding: '0.75rem 1rem', borderRadius: '2rem', border: '1px solid var(--border-color)', backdropFilter: 'blur(8px)', alignSelf: 'flex-start' }}>
           <Calendar size={18} color="var(--text-secondary)" />
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <input 
-              type="date" 
-              value={startDate} 
-              onChange={(e) => setStartDate(e.target.value)}
-              style={{ padding: '0.25rem 0.5rem', width: 'auto', border: 'none', background: 'transparent' }}
-            />
-            <span style={{ color: 'var(--text-secondary)' }}>to</span>
-            <input 
-              type="date" 
-              value={endDate} 
-              onChange={(e) => setEndDate(e.target.value)}
-              style={{ padding: '0.25rem 0.5rem', width: 'auto', border: 'none', background: 'transparent' }}
-            />
-          </div>
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ width: 'auto', border: 'none', background: 'transparent', fontSize: '0.875rem', fontWeight: 600, padding: 0 }} />
+          <span style={{ color: 'var(--text-secondary)', fontWeight: 800 }}>&rarr;</span>
+          <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ width: 'auto', border: 'none', background: 'transparent', fontSize: '0.875rem', fontWeight: 600, padding: 0 }} />
         </div>
       </div>
-      
-      <div style={{ overflow: 'auto', padding: '0', maxHeight: '70vh', position: 'relative' }}>
-        {dateRangeArray.length === 0 ? (
-          <div className="empty-state">Please select a valid date range.</div>
-        ) : (
-          <table className="dashboard-table" style={{ margin: 0, borderTop: 'none', position: 'relative' }}>
-            <thead style={{ position: 'sticky', top: 0, zIndex: 40 }} ref={headerRef}>
-              <tr>
-                <th style={{ position: 'sticky', left: 0, zIndex: 50, background: '#f8fafc', borderBottom: '2px solid var(--border-color)' }}>
-                  {/* Blank top-left cell */}
-                </th>
-                {dateRangeArray.map((date, i) => (
-                  <th key={i} className="date-header" style={{ borderBottom: '2px solid var(--border-color)' }}>{date}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {schema.map(section => (
-                <React.Fragment key={section.title}>
-                  <tr className="section-header">
-                    <td 
-                      colSpan={dateRangeArray.length + 1} 
-                      style={{ 
-                        position: 'sticky', 
-                        top: headerHeight - 1,
-                        left: 0, 
-                        zIndex: 35, 
-                        textAlign: 'left', 
-                        paddingLeft: '1rem',
-                        background: 'linear-gradient(to right, var(--accent-primary), var(--accent-purple))',
-                        color: 'white'
-                      }}
-                    >
-                      {section.title}
-                    </td>
-                  </tr>
-                  {section.fields.map(field => {
-                    if (field.type === 'text_long') {
-                      return (
-                        <React.Fragment key={field.id}>
-                          <tr>
-                            <td 
-                              colSpan={dateRangeArray.length + 1} 
-                              style={{ position: 'sticky', left: 0, background: '#e2e8f0', zIndex: 10, fontWeight: 600 }}
-                            >
+
+      <div className="clinician-accordion">
+        {schema.map((section, sIdx) => {
+          const isOpen = expandedSections.includes(sIdx);
+          return (
+            <div key={sIdx} className={`accordion-item ${isOpen ? 'active' : ''}`}>
+              <button className="accordion-trigger" onClick={() => toggleSection(sIdx)}>
+                <div className="accordion-title">
+                  <ClipboardList size={20} color="var(--accent-purple)" />
+                  <span>{section.title}</span>
+                </div>
+                <ChevronDown size={20} style={{ 
+                  transform: isOpen ? 'rotate(180deg)' : 'none', 
+                  transition: 'transform 0.3s',
+                  color: 'var(--text-secondary)'
+                }} />
+              </button>
+              
+              {isOpen && (
+                <div className="accordion-content">
+                  <div style={{ overflowX: 'auto', paddingBottom: '0.5rem' }}>
+                    <table className="dashboard-table" style={{ borderCollapse: 'separate', borderSpacing: '0.5rem' }}>
+                      <thead>
+                        <tr>
+                          <th className="sticky-col" style={{ left: 0, background: 'white', zIndex: 10, minWidth: '120px', padding: '0.5rem' }}>Field</th>
+                          {dates.map(date => (
+                            <th key={date} style={{ minWidth: '3.5rem', textAlign: 'center', fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                              {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' })}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {section.fields.map((field, fIdx) => (
+                          <tr key={fIdx}>
+                            <th className="sticky-col" style={{ left: 0, background: 'white', zIndex: 10, textAlign: 'left', fontWeight: 500, fontSize: '0.875rem', padding: '0.5rem' }}>
                               {field.label}
-                            </td>
+                            </th>
+                            {dates.map(date => {
+                              const row = patientData.find(d => d.Date === date);
+                              const val = row?.[field.id];
+                              const bgColor = getHeatmapColor(val, field.type, field.config);
+                              const textColor = getTextColor(val, field.type, field.config);
+                              
+                              return (
+                                <td key={date} style={{ padding: 0 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '3rem', height: '100%', width: '100%' }}>
+                                    {field.type === 'text_long' ? (
+                                      val ? (
+                                        <button 
+                                          onClick={() => setSelectedNote({ label: field.label, date, text: val })}
+                                          className="secondary"
+                                          style={{ width: '2.5rem', height: '2.5rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0, margin: 0 }}
+                                        >
+                                          <MessageSquare size={18} color="var(--accent-purple)" />
+                                        </button>
+                                      ) : (
+                                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', opacity: 0.5 }}>0</div>
+                                      )
+                                    ) : (
+                                      <div className="heatmap-cell" style={{ 
+                                        background: bgColor, 
+                                        color: textColor,
+                                        width: '100%',
+                                        height: '3rem',
+                                        borderRadius: 0, /* Fill the box */
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                      }}>
+                                        {val !== undefined && val !== null && val !== '' ? (
+                                          field.type === 'boolean' ? (val ? 'Y' : 'N') : val
+                                        ) : '0'}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              );
+                            })}
                           </tr>
-                          {dateRangeArray.map(date => {
-                            const row = dataByDate[date];
-                            const val = row ? row[field.label] : undefined;
-                            const dateObj = new Date(date);
-                            const displayDate = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
-                            
-                            return (
-                              <tr key={date}>
-                                <td style={{ position: 'sticky', left: 0, background: '#f8fafc', zIndex: 10, fontWeight: 500, paddingLeft: '2rem' }}>
-                                  {displayDate}
-                                </td>
-                                <td colSpan={dateRangeArray.length} style={{ textAlign: 'left', whiteSpace: 'pre-wrap', verticalAlign: 'top', background: 'white' }}>
-                                  {val || <span style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>No notes</span>}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </React.Fragment>
-                      );
-                    }
-
-                    return (
-                      <tr key={field.id}>
-                        <td style={{ position: 'sticky', left: 0, background: '#f8fafc', zIndex: 10, fontWeight: 500 }}>
-                          {field.label}
-                        </td>
-                        {dateRangeArray.map(date => {
-                          const row = dataByDate[date];
-                          const val = row ? row[field.label] : undefined;
-                          
-                          // Handle display formatting based on primitive type
-                          let displayVal = val;
-                          if (field.type === 'boolean') {
-                            displayVal = val === 'Yes' ? '✅' : '-';
-                          } else if (field.type === 'scale' || field.type === 'number') {
-                            displayVal = val !== undefined && val !== '' ? val : '-';
-                          } else if (!val) {
-                            displayVal = '-';
-                          }
-
-                          return <td key={date} style={{ background: 'white' }}>{displayVal}</td>;
-                        })}
-                      </tr>
-                    );
-                  })}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
-        )}
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
+
+      {/* NOTE MODAL */}
+      {selectedNote && (
+        <div className="modal-overlay" onClick={() => setSelectedNote(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>{selectedNote.label}</h3>
+                <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+                  {new Date(selectedNote.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                </p>
+              </div>
+              <button onClick={() => setSelectedNote(null)} className="secondary" style={{ width: 'auto', padding: '0.5rem', borderRadius: '50%' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={{ background: '#f8fafc', padding: '1.5rem', borderRadius: '1rem', border: '1px solid var(--border-color)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
+              {selectedNote.text}
+            </div>
+            <button onClick={() => setSelectedNote(null)} style={{ marginTop: '1.5rem' }}>Close</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

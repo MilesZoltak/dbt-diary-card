@@ -9,18 +9,16 @@ function Layout() {
   return (
     <div className="app-container">
       <header>
-        <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <Heart size={28} color="var(--accent-primary)" />
-            <h1 style={{ margin: 0 }}>DBT Diary Card</h1>
-          </div>
+        <Link to="/" className="header-logo">
+          <Heart size={28} color="var(--accent-primary)" />
+          <h1 style={{ margin: 0 }}>DBT Diary Card</h1>
         </Link>
         
         {accessToken && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            {user && <img src={user.picture} alt={user.name} style={{ width: '32px', height: '32px', borderRadius: '50%' }} />}
-            <button onClick={logout} className="secondary" style={{ width: 'auto', padding: '0.5rem' }}>
-              <LogOut size={20} />
+          <div className="header-actions">
+            {user && <img src={user.picture} alt={user.name} className="user-avatar" />}
+            <button onClick={logout} className="secondary" style={{ width: 'auto', padding: '0.6rem', borderRadius: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <LogOut size={18} />
             </button>
           </div>
         )}
