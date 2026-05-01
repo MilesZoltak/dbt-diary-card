@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings, ClipboardList, Loader2 } from 'lucide-react';
+import { Settings, ClipboardList, Loader2, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 function JournalView({ 
@@ -27,6 +27,19 @@ function JournalView({
     });
   };
 
+  const getLast7Days = () => {
+    const days = [];
+    const today = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      days.push(d);
+    }
+    return days;
+  };
+
+  const last7Days = getLast7Days();
+
   const renderField = (field) => {
     const value = form[field.id];
 
@@ -39,11 +52,13 @@ function JournalView({
         const listId = `ticks-${field.id}`;
         
         return (
-          <div className="form-row" key={field.id} style={{ alignItems: isDetailed ? 'flex-start' : 'center' }}>
-            <label style={{ paddingTop: isDetailed ? '0.25rem' : 0 }}>{field.label}</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1, justifyContent: 'flex-end' }}>
-              {isDetailed && <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{min}</span>}
-              <div style={{ display: 'flex', flexDirection: 'column', width: '150px' }}>
+          <div className="form-row" key={field.id} style={{ alignItems: isDetailed ? 'flex-start' : 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <label style={{ paddingTop: isDetailed ? '0.25rem' : 0, minWidth: '150px', flex: '1 1 20%' }}>{field.label}</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: '1 1 60%' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', width: '1.5rem', textAlign: 'right' }}>
+                {isDetailed ? min : ''}
+              </span>
+              <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
                 <input 
                   type="range" 
                   min={min} 
@@ -52,16 +67,20 @@ function JournalView({
                   value={value !== undefined ? value : start} 
                   onChange={e => !readOnly && setForm({...form, [field.id]: parseInt(e.target.value)})} 
                   disabled={readOnly}
-                  style={{ width: '100%', margin: 0 }} 
+                  style={{ width: '100%', margin: 0, cursor: readOnly ? 'default' : 'pointer' }} 
                 />
                 {isDetailed && (
-                  <datalist id={listId} style={{ display: 'flex', justifyContent: 'space-between', padding: '0 4px', marginTop: '4px' }}>
-                    {Array.from({length: max - min + 1}, (_, i) => min + i).map(n => <option key={n} value={n} label={n}></option>)}
+                  <datalist id={listId} style={{ display: 'flex', justifyContent: 'space-between', padding: '0 10px', marginTop: '4px' }}>
+                    {Array.from({length: max - min + 1}, (_, i) => min + i).map(n => <option key={n} value={n} label={n} style={{fontSize: '0.7rem', padding: 0, margin: 0}}></option>)}
                   </datalist>
                 )}
               </div>
-              {isDetailed && <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{max}</span>}
-              <span style={{ width: '20px', textAlign: 'right', fontWeight: 600 }}>{value !== undefined ? value : start}</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', width: '1.5rem', textAlign: 'left' }}>
+                {isDetailed ? max : ''}
+              </span>
+              <span style={{ width: '2rem', textAlign: 'right', fontWeight: 600, fontSize: '1.1rem' }}>
+                {value !== undefined ? value : start}
+              </span>
             </div>
           </div>
         );
@@ -151,9 +170,67 @@ function JournalView({
   };
 
   return (
-    <div className="grid">
+    <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+      
+      {/* Top History Bar */}
+      <div style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1rem', display: 'flex', justifyContent: 'space-between' }}>
+          <span>Last 7 Days</span>
+          {sheetId && !readOnly && (
+            <Link to={`/sheet/${sheetId}/clinician`} style={{ color: 'var(--accent-purple)', textDecoration: 'none', fontWeight: 500, textTransform: 'none', letterSpacing: 'normal' }}>
+              View Full Dashboard &rarr;
+            </Link>
+          )}
+        </h3>
+        <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+          {last7Days.map((d, i) => {
+            const dStr = d.toLocaleDateString();
+            const isDone = patientData.some(row => row['Date'] === dStr);
+            const dayName = d.toLocaleDateString(undefined, { weekday: 'short' });
+            const dayNum = d.getDate();
+            const isSelectedDate = !readOnly && entryDate === d.toISOString().split('T')[0];
+            
+            return (
+              <div 
+                key={i} 
+                onClick={() => {
+                  if (!readOnly && !submitting) {
+                    setEntryDate(d.toISOString().split('T')[0]);
+                  }
+                }}
+                style={{ 
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', 
+                  padding: '0.75rem 1rem', 
+                  background: isSelectedDate ? 'var(--accent-purple)' : (isDone ? 'var(--accent-purple-light)' : 'white'),
+                  color: isSelectedDate ? 'white' : 'inherit',
+                  border: `1px solid ${isSelectedDate || isDone ? 'var(--accent-purple)' : 'var(--border-color)'}`,
+                  borderRadius: '1rem',
+                  minWidth: '64px',
+                  cursor: readOnly || submitting ? 'default' : 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: isSelectedDate ? '0 4px 6px -1px rgba(124, 58, 237, 0.2)' : 'none',
+                  flex: '1 0 auto'
+                }}
+              >
+                <span style={{ fontSize: '0.75rem', color: isSelectedDate ? 'rgba(255,255,255,0.8)' : 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>
+                  {dayName}
+                </span>
+                <span style={{ fontSize: '1.25rem', fontWeight: 700, color: isSelectedDate ? 'white' : (isDone ? 'var(--accent-purple)' : 'var(--text-primary)'), marginTop: '0.125rem' }}>
+                  {dayNum}
+                </span>
+                {isDone ? (
+                  <Check size={16} color={isSelectedDate ? 'white' : 'var(--accent-purple)'} style={{marginTop: '0.25rem'}}/>
+                ) : (
+                  <div style={{height: '16px', marginTop: '0.25rem'}}></div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="card">
-        <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <h2 style={{ margin: 0 }}>Daily Log</h2>
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
             <input 
@@ -164,8 +241,8 @@ function JournalView({
               style={{ width: 'auto', padding: '0.5rem', fontSize: '0.875rem' }} 
             />
             {sheetId && !readOnly && (
-              <Link to={`/sheet/${sheetId}/builder`} className="secondary" style={{ padding: '0.5rem 1rem', textDecoration: 'none', borderRadius: '0.5rem', border: '1px solid var(--border-color)' }}>
-                <Settings size={16} style={{ display: 'inline', marginRight: '0.25rem', verticalAlign: 'middle' }} /> Edit Schema
+              <Link to={`/sheet/${sheetId}/builder`} className="secondary" style={{ padding: '0.5rem 1rem', textDecoration: 'none', borderRadius: '0.5rem', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center' }}>
+                <Settings size={16} style={{ marginRight: '0.25rem' }} /> Edit Schema
               </Link>
             )}
           </div>
@@ -187,41 +264,6 @@ function JournalView({
             {submitting ? <Loader2 className="spin" size={20} /> : 'Submit Entry'}
           </button>
         </form>
-      </div>
-
-      <div className="card" style={{ padding: 0, overflow: 'hidden', alignSelf: 'start' }}>
-        <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)' }}>
-          <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}><ClipboardList size={20} /> Recent History</h2>
-        </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                {schema.slice(0, 1).map(s => s.fields.slice(0, 2).map(f => <th key={f.id}>{f.label}</th>))}
-              </tr>
-            </thead>
-            <tbody>
-              {patientData.length === 0 ? (
-                <tr><td colSpan="3" className="empty-state">No entries.</td></tr>
-              ) : (
-                [...patientData].reverse().slice(0, 10).map((row, i) => (
-                  <tr key={i}>
-                    <td>{row['Date']}</td>
-                    {schema.slice(0, 1).map(s => s.fields.slice(0, 2).map(f => <td key={f.id}>{row[f.label]}</td>))}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div style={{ padding: '1rem', textAlign: 'center', borderTop: '1px solid var(--border-color)' }}>
-          {sheetId && !readOnly ? (
-            <Link to={`/sheet/${sheetId}/clinician`} style={{ color: 'var(--accent-purple)', textDecoration: 'none', fontWeight: 500, fontSize: '0.875rem' }}>View Full Dashboard &rarr;</Link>
-          ) : (
-            <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>View Full Dashboard &rarr;</span>
-          )}
-        </div>
       </div>
     </div>
   );
