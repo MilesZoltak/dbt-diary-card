@@ -48,35 +48,51 @@ function JournalView({
         const min = field.config?.min ?? 0;
         const max = field.config?.max ?? 5;
         const start = field.config?.start ?? min;
-        const isDetailed = !!field.config?.detailed;
         const listId = `ticks-${field.id}`;
         
         return (
-          <div className="form-row" key={field.id} style={{ alignItems: isDetailed ? 'flex-start' : 'center', flexWrap: 'wrap', gap: '1rem' }}>
-            <label style={{ paddingTop: isDetailed ? '0.25rem' : 0, minWidth: '150px', flex: '1 1 20%' }}>{field.label}</label>
+          <div className="form-row" key={field.id} style={{ alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <label style={{ minWidth: '150px', flex: '1 1 20%' }}>{field.label}</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: '1 1 60%' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', width: '1.5rem', textAlign: 'right' }}>
-                {isDetailed ? min : ''}
+                {min}
               </span>
-              <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+              <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+                {/* Custom Track */}
+                <div style={{ position: 'absolute', width: '100%', height: '6px', background: 'var(--border-color)', borderRadius: '3px', zIndex: 0 }} />
+                
+                {/* Ticks */}
+                <div style={{ position: 'absolute', width: '100%', zIndex: 0, pointerEvents: 'none' }}>
+                    {Array.from({length: max - min + 1}, (_, i) => min + i).map(n => {
+                      const percent = ((n - min) / (max - min)) * 100;
+                      return (
+                        <div key={n} style={{ 
+                          position: 'absolute', 
+                          left: `calc(${percent}% + ${(1 - percent/50) * 10}px)`, 
+                          top: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          width: '2px',
+                          height: '10px',
+                          backgroundColor: '#94a3b8',
+                          borderRadius: '1px'
+                        }} />
+                      );
+                    })}
+                </div>
+
                 <input 
                   type="range" 
                   min={min} 
                   max={max} 
-                  list={isDetailed ? listId : undefined}
+                  list={listId}
                   value={value !== undefined ? value : start} 
                   onChange={e => !readOnly && setForm({...form, [field.id]: parseInt(e.target.value)})} 
                   disabled={readOnly}
-                  style={{ width: '100%', margin: 0, cursor: readOnly ? 'default' : 'pointer' }} 
+                  style={{ width: '100%', margin: 0, cursor: readOnly ? 'default' : 'pointer', position: 'relative', zIndex: 1, background: 'transparent' }} 
                 />
-                {isDetailed && (
-                  <datalist id={listId} style={{ display: 'flex', justifyContent: 'space-between', padding: '0 10px', marginTop: '4px' }}>
-                    {Array.from({length: max - min + 1}, (_, i) => min + i).map(n => <option key={n} value={n} label={n} style={{fontSize: '0.7rem', padding: 0, margin: 0}}></option>)}
-                  </datalist>
-                )}
               </div>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', width: '1.5rem', textAlign: 'left' }}>
-                {isDetailed ? max : ''}
+                {max}
               </span>
               <span style={{ width: '2rem', textAlign: 'right', fontWeight: 600, fontSize: '1.1rem' }}>
                 {value !== undefined ? value : start}

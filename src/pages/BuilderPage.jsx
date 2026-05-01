@@ -341,12 +341,6 @@ function BuilderPage() {
                         </div>
                       </div>
                       
-                      <div className="form-group" style={{ margin: 0 }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 500, cursor: 'pointer' }}>
-                          <input type="checkbox" checked={!!currentField.config?.detailed} onChange={e => updateActiveField({ config: { detailed: e.target.checked } })} style={{ width: 'auto', margin: 0 }} />
-                          Show detailed ticks and min/max labels
-                        </label>
-                      </div>
                     </div>
                   )}
 
