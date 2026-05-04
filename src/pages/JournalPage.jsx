@@ -30,7 +30,7 @@ function JournalPage() {
   // Load existing data into form when date changes
   useEffect(() => {
     if (patientData.length > 0 && schema.length > 0) {
-      const entry = patientData.find(d => normalizeDate(d.Date) === entryDate);
+      const entry = [...patientData].reverse().find(d => normalizeDate(d.Date) === entryDate);
       
       if (entry) {
         const loadedForm = {};

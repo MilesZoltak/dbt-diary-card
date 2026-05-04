@@ -103,7 +103,7 @@ function ClinicianView({ schema, patientData }) {
                               {field.label}
                             </th>
                             {dates.map(date => {
-                              const row = patientData.find(d => normalizeDate(d.Date) === date);
+                              const row = [...patientData].reverse().find(d => normalizeDate(d.Date) === date);
                               const val = row?.[field.id];
                               const bgColor = getHeatmapColor(val, field.type, field.config);
                               const textColor = getTextColor(val, field.type, field.config);
