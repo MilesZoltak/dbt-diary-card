@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { Activity, Users, Loader2, AlertCircle } from 'lucide-react';
+import { Link, Navigate } from 'react-router-dom';
+import { Activity, Users, Loader2, AlertCircle, ClipboardList } from 'lucide-react';
 import { useAuth } from '../contexts/GoogleAuthContext';
-import GoogleSheetsService from '../services/GoogleSheetsService';
+import FirestoreService from '../services/FirestoreService';
 import SchemaService from '../services/SchemaService';
-import { dbtSchema as defaultDbtSchema } from '../config/dbtSchema';
 import JournalView from '../components/JournalView';
-import { normalizeDate } from '../utils/dateUtils';
+import { normalizeDate, getLocalDateString } from '../utils/dateUtils';
+import { dbtSchema as defaultDbtSchema } from '../config/dbtSchema';
 
 function JournalPage() {
-  const { sheetId } = useParams();
-  const { accessToken } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -19,33 +18,40 @@ function JournalPage() {
   const [schema, setSchema] = useState([]);
   const [patientData, setPatientData] = useState([]);
   const [form, setForm] = useState({});
-  const [entryDate, setEntryDate] = useState(new Date().toISOString().split('T')[0]);
+  const [entryDate, setEntryDate] = useState(getLocalDateString());
 
   useEffect(() => {
-    if (accessToken && sheetId) {
-      loadSheetData();
+    if (user && profile) {
+      loadFirestoreData();
+      
+      // Handle Invite Link
+      const searchParams = new URLSearchParams(window.location.search);
+      const inviteUid = searchParams.get('invite');
+      if (inviteUid && profile.role === 'patient') {
+        FirestoreService.addToRoster(inviteUid, user.uid, {
+          displayName: profile.displayName || user.displayName || 'Patient',
+          email: profile.email || user.email
+        }).then(() => {
+          // Clean up URL
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }).catch(console.error);
+      }
     }
-  }, [accessToken, sheetId]);
+  }, [user, profile]);
 
   // Load existing data into form when date changes
   useEffect(() => {
-    if (patientData.length > 0 && schema.length > 0) {
-      const entry = [...patientData].reverse().find(d => normalizeDate(d.Date) === entryDate);
+    if (patientData.length > 0 && schema?.sections?.length > 0) {
+      const entry = [...patientData].reverse().find(d => normalizeDate(d.logicalDate || d.Date) === entryDate);
       
       if (entry) {
-        const loadedForm = {};
-        schema.forEach(section => {
-          section.fields.forEach(f => {
-            let val = entry[f.label];
-            if (f.type === 'scale') {
-              const parsed = parseInt(val);
-              loadedForm[f.id] = isNaN(parsed) ? (f.config?.start ?? f.config?.min ?? 0) : parsed;
-            }
-            else if (f.type === 'boolean') loadedForm[f.id] = val === 'Y' || val === 'Yes' || val === 'TRUE' || val === true;
-            else if (f.type === 'multi_select') loadedForm[f.id] = val ? val.split(', ').filter(Boolean) : [];
-            else loadedForm[f.id] = val || '';
+        // We use the entry's responses, mapping to the active schema's defaults for missing fields
+        const loadedForm = SchemaService.generateDefaultResponses(schema);
+        if (entry.responses) {
+          Object.keys(entry.responses).forEach(key => {
+            loadedForm[key] = entry.responses[key];
           });
-        });
+        }
         setForm(loadedForm);
       } else {
         resetForm();
@@ -55,72 +61,73 @@ function JournalPage() {
     }
   }, [entryDate, patientData, schema]);
 
-  const loadSheetData = async () => {
+  const loadFirestoreData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const sheetsService = new GoogleSheetsService(sheetId, accessToken);
+      let activeTemplate = await FirestoreService.fetchActiveTemplate(user.uid);
       
-      await sheetsService.ensureTabExists('Config');
-      await sheetsService.ensureTabExists('Data');
-
-      let configRows = await sheetsService.fetchData('Config');
-      let currentSchema = configRows.length === 0 ? defaultDbtSchema : SchemaService.parseConfig(configRows);
-      
-      if (configRows.length === 0) {
-        const flatConfig = SchemaService.flattenSchema(defaultDbtSchema);
-        await sheetsService.updateSheet('Config', flatConfig);
-        const dataHeaders = SchemaService.getExpectedDataHeaders(defaultDbtSchema);
-        await sheetsService.updateSheet('Data', [dataHeaders]);
+      if (!activeTemplate) {
+        // Fallback to default schema if no template found in Firestore
+        activeTemplate = { 
+          id: 'default', 
+          name: 'Standard DBT Template', 
+          version: 1, 
+          sections: defaultDbtSchema 
+        };
       }
 
-      setSchema(currentSchema);
-      resetForm(currentSchema);
+      setSchema(activeTemplate);
+      resetForm(activeTemplate);
 
-      const data = await sheetsService.fetchData('Data');
-      setPatientData(data);
+      const entries = await FirestoreService.fetchDiaryCards(user.uid);
+      setPatientData(entries);
     } catch (err) {
       console.error(err);
-      setError("Failed to load diary sheet: " + err.message);
+      setError("Failed to load diary data: " + err.message);
     } finally {
       setLoading(false);
     }
   };
 
   const resetForm = (currentSchema = schema) => {
-    const defaults = {};
-    currentSchema.forEach(section => {
-      section.fields.forEach(f => {
-        if (f.type === 'scale') defaults[f.id] = f.config?.start !== undefined ? f.config.start : (f.config?.min || 0);
-        else if (f.type === 'boolean') defaults[f.id] = false;
-        else if (f.type === 'multi_select') defaults[f.id] = [];
-        else defaults[f.id] = '';
-      });
-    });
-    setForm(defaults);
+    if (currentSchema && currentSchema.sections) {
+      setForm(SchemaService.generateDefaultResponses(currentSchema));
+    } else {
+      setForm({});
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    try {
+      const payload = {
+        templateId: schema.id || 'unknown',
+        templateVersion: schema.version || 1,
+        schemaSnapshot: schema,
+        responses: form,
+        status: 'draft'
+      };
+      await FirestoreService.saveDiaryCard(user.uid, entryDate, payload);
+    } catch (err) {
+      console.error("Draft auto-save failed:", err);
+    }
   };
 
   const handlePatientSubmit = async () => {
     setSubmitting(true);
     try {
-      const sheetsService = new GoogleSheetsService(sheetId, accessToken);
-      const dateString = new Date(entryDate + 'T12:00:00').toLocaleDateString();
-      const rowData = { 'Date': dateString };
+      const payload = {
+        templateId: schema.id || 'unknown',
+        templateVersion: schema.version || 1,
+        schemaSnapshot: schema,
+        responses: form,
+        status: 'submitted'
+      };
       
-      schema.forEach(section => {
-        section.fields.forEach(f => {
-          let value = form[f.id];
-          if (f.type === 'boolean') value = value ? 'Y' : 'N';
-          if (f.type === 'multi_select') value = Array.isArray(value) ? value.join(', ') : '';
-          rowData[f.label] = value;
-        });
-      });
+      await FirestoreService.saveDiaryCard(user.uid, entryDate, payload);
       
-      await sheetsService.addRow(rowData, 'Data');
-      resetForm();
-      
-      const newData = await sheetsService.fetchData('Data');
-      setPatientData(newData);
+      const newEntries = await FirestoreService.fetchDiaryCards(user.uid);
+      setPatientData(newEntries);
     } catch (err) {
       setError("Failed to save entry: " + err.message);
     } finally {
@@ -128,19 +135,32 @@ function JournalPage() {
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}><Loader2 className="spin" size={32} color="var(--accent-primary)" /></div>;
+  }
+
+  if (!user || !profile) {
+    return (
+      <div style={{ textAlign: 'center', padding: '4rem' }}>
+        <h2>Please log in and select a role to access your diary.</h2>
+      </div>
+    );
   }
 
   return (
     <div>
-      <div className="toggle-group">
-        <Link to={`/sheet/${sheetId}/journal`} className="toggle-btn active" style={{textDecoration: 'none'}}>
+      <div className="toggle-group" style={{ marginBottom: '1.5rem' }}>
+        <Link to="/journal" className="toggle-btn active" style={{textDecoration: 'none'}}>
           <Activity size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '0.5rem' }} /> Data Entry
         </Link>
-        <Link to={`/sheet/${sheetId}/clinician`} className="toggle-btn" style={{textDecoration: 'none'}}>
-          <Users size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '0.5rem' }} /> Dashboard View
+        <Link to="/clinician" className="toggle-btn" style={{textDecoration: 'none'}}>
+          <Users size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '0.5rem' }} /> My Dashboard
         </Link>
+        {profile.role === 'clinician' && (
+          <Link to="/clinician?view=patients" className="toggle-btn" style={{textDecoration: 'none'}}>
+            <ClipboardList size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '0.5rem' }} /> My Patients
+          </Link>
+        )}
       </div>
 
       {error && (
@@ -150,15 +170,15 @@ function JournalPage() {
       )}
 
       <JournalView 
-        schema={schema}
+        schema={schema?.sections || []}
         patientData={patientData}
         form={form}
         setForm={setForm}
         entryDate={entryDate}
         setEntryDate={setEntryDate}
         onSubmit={handlePatientSubmit}
+        onSaveDraft={handleSaveDraft}
         submitting={submitting}
-        sheetId={sheetId}
       />
     </div>
   );

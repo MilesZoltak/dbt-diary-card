@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { Activity, Calendar, ClipboardList, ChevronDown, MessageSquare, X } from 'lucide-react';
-import { normalizeDate } from '../utils/dateUtils';
+import { normalizeDate, getLocalDateString } from '../utils/dateUtils';
 
 function ClinicianView({ schema, patientData }) {
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 6);
-    return d.toISOString().split('T')[0];
+    return getLocalDateString(d);
   });
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(getLocalDateString());
   const [expandedSections, setExpandedSections] = useState([0]); 
   const [selectedNote, setSelectedNote] = useState(null); // { label, date, text }
 
@@ -28,6 +28,12 @@ function ClinicianView({ schema, patientData }) {
 
   const getHeatmapColor = (value, type, config) => {
     if (value === undefined || value === null || value === '') return 'transparent';
+    
+    if (type === 'boolean') {
+      const isTrue = value === true || value === 'TRUE' || value === 'true' || value === 'Yes' || value === 'Y';
+      return isTrue ? 'rgba(124, 58, 237, 0.8)' : 'rgba(226, 232, 240, 0.5)';
+    }
+    
     if (type !== 'scale') return 'rgba(226, 232, 240, 0.5)';
     
     const min = config?.min ?? 0;
@@ -40,6 +46,12 @@ function ClinicianView({ schema, patientData }) {
 
   const getTextColor = (value, type, config) => {
     if (value === undefined || value === null || value === '') return 'var(--text-secondary)';
+    
+    if (type === 'boolean') {
+      const isTrue = value === true || value === 'TRUE' || value === 'true' || value === 'Yes' || value === 'Y';
+      return isTrue ? 'white' : 'var(--text-primary)';
+    }
+    
     if (type !== 'scale') return 'var(--text-primary)';
     
     const min = config?.min ?? 0;
@@ -103,8 +115,8 @@ function ClinicianView({ schema, patientData }) {
                               {field.label}
                             </th>
                             {dates.map(date => {
-                              const row = [...patientData].reverse().find(d => normalizeDate(d.Date) === date);
-                              const val = row?.[field.id];
+                              const row = [...patientData].reverse().find(d => normalizeDate(d.logicalDate || d.Date) === date);
+                              const val = row?.responses?.[field.id] ?? row?.[field.id];
                               const bgColor = getHeatmapColor(val, field.type, field.config);
                               const textColor = getTextColor(val, field.type, field.config);
                               

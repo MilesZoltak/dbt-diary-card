@@ -1,84 +1,39 @@
 /**
- * Handles conversion between the flat Google Sheet 'Config' tab 
- * and the nested Schema object used by the UI.
+ * Utility service for handling the new JSON Schema Template format.
  */
 class SchemaService {
   /**
-   * Converts flat rows from Google Sheets into a section-based schema.
+   * Generates the default form state based on a template's schema.
+   * Useful for initializing a new diary card.
    */
-  static parseConfig(rows) {
-    if (!rows || rows.length === 0) return [];
-
-    const sectionsMap = {};
-    const sectionsOrder = [];
-
-    rows.forEach(row => {
-      const sectionTitle = row.Section || 'General';
-      if (!sectionsMap[sectionTitle]) {
-        sectionsMap[sectionTitle] = {
-          title: sectionTitle,
-          description: row.Description || '',
-          fields: []
-        };
-        sectionsOrder.push(sectionTitle);
-      }
-
-      let config = {};
-      try {
-        if (row.ConfigJSON) {
-          config = JSON.parse(row.ConfigJSON);
+  static generateDefaultResponses(template) {
+    if (!template || !template.sections) return {};
+    
+    const defaults = {};
+    template.sections.forEach(section => {
+      section.fields.forEach(f => {
+        if (f.type === 'scale') {
+          defaults[f.id] = f.config?.start !== undefined ? f.config.start : (f.config?.min || 0);
+        } else if (f.type === 'boolean') {
+          defaults[f.id] = false;
+        } else if (f.type === 'multi_select') {
+          defaults[f.id] = [];
+        } else {
+          defaults[f.id] = '';
         }
-      } catch (e) {
-        console.warn(`Failed to parse ConfigJSON for field ${row.Label}`, e);
-      }
-
-      const fieldLabel = (row.Label || '').trim();
-      sectionsMap[sectionTitle].fields.push({
-        id: fieldLabel,
-        label: fieldLabel,
-        type: row.Type || 'text_short',
-        config: config
       });
     });
-
-    return sectionsOrder.map(title => sectionsMap[title]);
+    return defaults;
   }
 
   /**
-   * Converts nested schema object back into flat rows for Google Sheets.
+   * Validates if a template object has the required fields.
    */
-  static flattenSchema(schema) {
-    const rows = [];
-    // We only save the necessary columns back to the sheet to keep it clean.
-    // The columns are: Section, Label, Type, ConfigJSON
-    rows.push(['Section', 'Label', 'Type', 'ConfigJSON']); 
-    
-    schema.forEach(section => {
-      section.fields.forEach(field => {
-        rows.push([
-          section.title,
-          field.label,
-          field.type,
-          field.config ? JSON.stringify(field.config) : '{}'
-        ]);
-      });
-    });
-    
-    return rows;
-  }
-
-  /**
-   * Generates the expected headers for the Data tab based on the schema.
-   * Format: Date, Field1, Field2...
-   */
-  static getExpectedDataHeaders(schema) {
-    const headers = ['Date'];
-    schema.forEach(section => {
-      section.fields.forEach(field => {
-        headers.push(field.label);
-      });
-    });
-    return headers;
+  static isValidTemplate(template) {
+    if (!template) return false;
+    if (!template.id || !template.name || typeof template.version !== 'number') return false;
+    if (!Array.isArray(template.sections)) return false;
+    return true;
   }
 }
 

@@ -22,3 +22,14 @@ export const normalizeDate = (dateStr) => {
     return null;
   }
 };
+
+/**
+ * Returns the current date (or a provided date) as a YYYY-MM-DD string
+ * using the local timezone, preventing UTC shift bugs.
+ */
+export const getLocalDateString = (d = new Date()) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};

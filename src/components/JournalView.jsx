@@ -1,7 +1,7 @@
 import React from 'react';
 import { Settings, ClipboardList, Loader2, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { normalizeDate } from '../utils/dateUtils';
+import { normalizeDate, getLocalDateString } from '../utils/dateUtils';
 
 function JournalView({ 
   schema, 
@@ -10,9 +10,9 @@ function JournalView({
   setForm, 
   entryDate, 
   setEntryDate, 
-  onSubmit, 
+  onSubmit,
+  onSaveDraft,
   submitting, 
-  sheetId,
   readOnly = false
 }) {
   const [currentSectionIdx, setCurrentSectionIdx] = React.useState(0);
@@ -200,11 +200,11 @@ function JournalView({
         <h4 style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', letterSpacing: '0.05em', marginBottom: '1rem' }}>Last 7 Days</h4>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.4rem' }}>
           {last7Days.map(dateObj => {
-            const dStr = dateObj.toISOString().split('T')[0];
+            const dStr = getLocalDateString(dateObj);
             const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
             const dayNum = dateObj.getDate();
             const isSelected = entryDate === dStr;
-            const hasData = patientData.some(d => normalizeDate(d.Date) === dStr);
+            const hasData = patientData.some(d => normalizeDate(d.logicalDate || d.Date) === dStr);
 
             return (
               <div 
@@ -244,8 +244,8 @@ function JournalView({
               disabled={readOnly}
               style={{ width: 'auto', padding: '0.5rem', fontSize: '0.875rem', border: '1px solid var(--border-color)', borderRadius: '0.5rem' }} 
             />
-            {sheetId && !readOnly && (
-              <Link to={`/sheet/${sheetId}/builder`} className="secondary" style={{ padding: '0.5rem', textDecoration: 'none', borderRadius: '0.5rem', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', fontSize: '0.875rem' }}>
+            {!readOnly && (
+              <Link to="/builder" className="secondary" style={{ padding: '0.5rem', textDecoration: 'none', borderRadius: '0.5rem', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', fontSize: '0.875rem' }}>
                 <Settings size={16} />
               </Link>
             )}
@@ -289,7 +289,10 @@ function JournalView({
               <button 
                 type="button" 
                 className="secondary" 
-                onClick={() => setCurrentSectionIdx(prev => prev - 1)}
+                onClick={() => {
+                  setCurrentSectionIdx(prev => prev - 1);
+                  if (!readOnly && onSaveDraft) onSaveDraft();
+                }}
                 style={{ flex: 1 }}
               >
                 Back
@@ -299,7 +302,10 @@ function JournalView({
             {currentSectionIdx < totalSections - 1 ? (
               <button 
                 type="button" 
-                onClick={() => setCurrentSectionIdx(prev => prev + 1)}
+                onClick={() => {
+                  setCurrentSectionIdx(prev => prev + 1);
+                  if (!readOnly && onSaveDraft) onSaveDraft();
+                }}
                 style={{ flex: 2 }}
               >
                 Next Section

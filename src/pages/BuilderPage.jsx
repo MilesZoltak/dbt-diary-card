@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Save, Plus, Trash2, Edit2, Loader2, GripVertical, Settings, Eye, Dices, Activity, Users, ChevronDown, Database, Search, FileText } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Save, Plus, Trash2, Edit2, Loader2, GripVertical, Settings, Eye, Dices, Activity, Users, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/GoogleAuthContext';
-import GoogleSheetsService from '../services/GoogleSheetsService';
-import SchemaService from '../services/SchemaService';
-import DriveService from '../services/DriveService';
+import FirestoreService from '../services/FirestoreService';
 import { dbtSchema as defaultDbtSchema } from '../config/dbtSchema';
 import { generateMockData } from '../utils/mockDataGenerator';
 import JournalView from '../components/JournalView';
@@ -21,15 +19,15 @@ const PRIMITIVE_TYPES = [
 ];
 
 function BuilderPage() {
-  const { sheetId } = useParams();
   const navigate = useNavigate();
-  const { accessToken } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   
   const [schema, setSchema] = useState([]);
+  const [templateMetadata, setTemplateMetadata] = useState({ id: `tmpl_${Date.now()}`, name: 'New Template', version: 1 });
   const [activeField, setActiveField] = useState(null); // { sectionIndex, fieldIndex }
   const [editingField, setEditingField] = useState(null); // { sectionIndex, fieldIndex } for inline rename
   const [draggedItem, setDraggedItem] = useState(null); // { sectionIndex, fieldIndex }
@@ -40,27 +38,31 @@ function BuilderPage() {
   const [mockData, setMockData] = useState([]);
   const [mockForm, setMockForm] = useState({});
   const [mockEntryDate, setMockEntryDate] = useState(new Date().toISOString().split('T')[0]);
-  
-  const [showSaveModal, setShowSaveModal] = useState(false);
-  const [newSheetName, setNewSheetName] = useState('My DBT Diary Card');
-  const [searchResults, setSearchResults] = useState([]);
-  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
-    if (accessToken && sheetId) {
+    if (user) {
       loadSchema();
-    } else if (!sheetId) {
+    } else if (!authLoading) {
+      // If not logged in and not loading auth, default to template
       setSchema(JSON.parse(JSON.stringify(defaultDbtSchema)));
     }
-  }, [accessToken, sheetId]);
+  }, [user, authLoading]);
 
   const loadSchema = async () => {
     setLoading(true);
     try {
-      const sheetsService = new GoogleSheetsService(sheetId, accessToken);
-      let configRows = await sheetsService.fetchData('Config');
-      let currentSchema = configRows.length === 0 ? defaultDbtSchema : SchemaService.parseConfig(configRows);
-      setSchema(JSON.parse(JSON.stringify(currentSchema)));
+      let activeTemplate = await FirestoreService.fetchActiveTemplate(user.uid);
+      if (activeTemplate) {
+        setTemplateMetadata({ 
+          id: activeTemplate.id, 
+          name: activeTemplate.name || 'Custom Template', 
+          version: activeTemplate.version || 1 
+        });
+        setSchema(activeTemplate.sections || []);
+      } else {
+        setSchema(JSON.parse(JSON.stringify(defaultDbtSchema)));
+        setTemplateMetadata({ id: `tmpl_${Date.now()}`, name: 'Standard DBT Template', version: 1 });
+      }
     } catch (err) {
       console.error(err);
       setError("Failed to load schema: " + err.message);
@@ -69,63 +71,22 @@ function BuilderPage() {
     }
   };
 
-  const handleSearch = async (query) => {
-    if (!accessToken) return;
-    setSearching(true);
-    try {
-      const driveService = new DriveService(accessToken);
-      const files = await driveService.searchSpreadsheets(query);
-      setSearchResults(files);
-    } catch (err) {
-      console.error('Search error:', err);
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  const handleSave = async (targetId = sheetId) => {
-    if (!targetId) {
-      setShowSaveModal(true);
-      handleSearch(''); // Load initial recent sheets
-      return;
-    }
+  const handleSave = async () => {
+    if (!user) return;
     setSaving(true);
     setError(null);
     try {
-      const sheetsService = new GoogleSheetsService(targetId, accessToken);
-      // Ensure tabs exist first
-      await sheetsService.ensureTabExists('Config');
-      await sheetsService.ensureTabExists('Data');
-
-      const flatConfig = SchemaService.flattenSchema(schema);
-      await sheetsService.updateSheet('Config', flatConfig);
-      
-      const dataHeaders = SchemaService.getExpectedDataHeaders(schema);
-      const existingData = await sheetsService.fetchData('Data');
-      if (existingData.length === 0) {
-         await sheetsService.updateSheet('Data', [dataHeaders]);
-      } else {
-         await sheetsService.updateRow1('Data', dataHeaders);
-      }
-      
-      navigate(`/sheet/${targetId}/journal`);
+      const templateData = {
+        name: templateMetadata.name,
+        version: templateMetadata.version + 1, // Increment version on save
+        sections: schema
+      };
+      await FirestoreService.saveTemplate(user.uid, templateMetadata.id, templateData, true);
+      navigate(`/journal`);
     } catch (err) {
       console.error(err);
       setError("Failed to save schema: " + err.message);
     } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleCreateAndSave = async () => {
-    setSaving(true);
-    setError(null);
-    try {
-      const newSheet = await GoogleSheetsService.createSpreadsheet(newSheetName, accessToken);
-      await handleSave(newSheet.spreadsheetId);
-    } catch (err) {
-      console.error(err);
-      setError("Failed to create sheet: " + err.message);
       setSaving(false);
     }
   };
@@ -195,7 +156,7 @@ function BuilderPage() {
     setSchema(newSchema);
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}><Loader2 className="spin" size={32} color="var(--accent-primary)" /></div>;
   }
 
@@ -209,21 +170,15 @@ function BuilderPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.75rem', fontWeight: 800 }}>
-              <Settings size={28} color="var(--accent-primary)"/> Schema Builder
+              <Settings size={28} color="var(--accent-primary)"/> {templateMetadata.name}
             </h2>
-            <p style={{ color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', fontSize: '0.875rem' }}>Customize your diary structure</p>
+            <p style={{ color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', fontSize: '0.875rem' }}>Version {templateMetadata.version} • Customize your diary structure</p>
           </div>
 
           <div style={{ display: 'flex', gap: '0.75rem' }}>
-            {sheetId ? (
-              <Link to={`/sheet/${sheetId}/journal`} className="secondary" style={{ padding: '0.5rem 1rem', textDecoration: 'none', borderRadius: '2rem', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', fontSize: '0.875rem', fontWeight: 600 }}>
-                <ArrowLeft size={16} style={{ marginRight: '0.5rem' }} /> Back
-              </Link>
-            ) : (
-              <Link to="/" className="secondary" style={{ padding: '0.5rem 1rem', textDecoration: 'none', borderRadius: '2rem', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', fontSize: '0.875rem', fontWeight: 600 }}>
-                <ArrowLeft size={16} style={{ marginRight: '0.5rem' }} /> Back
-              </Link>
-            )}
+            <Link to="/journal" className="secondary" style={{ padding: '0.5rem 1rem', textDecoration: 'none', borderRadius: '2rem', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', fontSize: '0.875rem', fontWeight: 600 }}>
+              <ArrowLeft size={16} style={{ marginRight: '0.5rem' }} /> Back
+            </Link>
           </div>
         </div>
 
@@ -385,8 +340,8 @@ function BuilderPage() {
               <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '0.5rem 0' }} />
 
               <button 
-                onClick={() => handleSave()} 
-                disabled={saving} 
+                onClick={handleSave} 
+                disabled={saving || !user} 
                 style={{ 
                   display: 'flex', alignItems: 'center', justifyContent: 'center', 
                   width: '100%', padding: '1rem', borderRadius: '1.25rem', 
@@ -399,7 +354,7 @@ function BuilderPage() {
             </div>
           </div>
 
-          {/* RIGHT COLUMN: CONFIG & (DEPRECATED LOCAL PREVIEW) */}
+          {/* RIGHT COLUMN: CONFIG */}
           <div className="desktop-settings" style={{ position: 'sticky', top: '2rem', height: 'fit-content' }}>
             <h3 style={{ marginBottom: '1rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>FIELD SETTINGS</h3>
             <div className="card">
@@ -424,73 +379,6 @@ function BuilderPage() {
         </div>
         {currentField && <FieldSettingsContent currentField={currentField} updateActiveField={updateActiveField} />}
       </div>
-
-      {/* SAVE TO SHEET MODAL */}
-      {showSaveModal && (
-        <div className="modal-overlay" onClick={() => setShowSaveModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
-            <h2 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Database size={24} color="var(--accent-primary)" /> Save to Google Sheet
-            </h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-              To save your custom diary card, you need to connect it to a Google Sheet.
-            </p>
-
-            <div style={{ marginBottom: '2rem' }}>
-              <label style={{ display: 'block', fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.5rem' }}>Create a New Sheet</label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <input 
-                  type="text" 
-                  value={newSheetName} 
-                  onChange={e => setNewSheetName(e.target.value)} 
-                  placeholder="Sheet Name"
-                  style={{ flex: 1 }}
-                />
-                <button onClick={handleCreateAndSave} disabled={saving} style={{ width: 'auto' }}>
-                  {saving ? <Loader2 className="spin" size={18} /> : 'Create & Save'}
-                </button>
-              </div>
-            </div>
-
-            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
-              <label style={{ display: 'block', fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.5rem' }}>Or Select Existing Sheet</label>
-              <div style={{ position: 'relative', marginBottom: '1rem' }}>
-                <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-                <input 
-                  type="text" 
-                  placeholder="Search spreadsheets..." 
-                  onChange={e => {
-                     const val = e.target.value;
-                     handleSearch(val);
-                  }}
-                  style={{ paddingLeft: '40px' }}
-                />
-                {searching && <Loader2 className="spin" size={18} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--accent-primary)' }} />}
-              </div>
-
-              <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '1rem', padding: '0.5rem' }}>
-                {searchResults.length === 0 && !searching && <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>No sheets found</div>}
-                {searchResults.map(file => (
-                  <div 
-                    key={file.id} 
-                    onClick={() => handleSave(file.id)}
-                    style={{ padding: '0.75rem', borderRadius: '0.75rem', cursor: 'pointer', transition: 'background 0.2s', display: 'flex', alignItems: 'center', gap: '0.75rem' }}
-                    className="form-row"
-                  >
-                    <FileText size={18} color="var(--accent-primary)" />
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontWeight: 500, fontSize: '0.9rem' }}>{file.name}</span>
-                      <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Modified: {new Date(file.modifiedTime).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <button onClick={() => setShowSaveModal(false)} className="secondary" style={{ marginTop: '1.5rem', width: '100%' }}>Cancel</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -500,7 +388,7 @@ function FieldSettingsContent({ currentField, updateActiveField }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
       <div className="form-group">
-        <label>Field Label (Column Name)</label>
+        <label>Field Label (Unique Key)</label>
         <input type="text" value={currentField.label} onChange={e => updateActiveField({ label: e.target.value })} />
       </div>
       
@@ -593,7 +481,7 @@ function FieldSettingsContent({ currentField, updateActiveField }) {
   );
 }
 
-// Custom Select Component for a premium feel and better mobile behavior
+// Custom Select Component
 function CustomSelect({ value, options, onChange }) {
   const [isOpen, setIsOpen] = React.useState(false);
   const containerRef = React.useRef(null);

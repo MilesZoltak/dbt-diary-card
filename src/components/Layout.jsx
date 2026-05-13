@@ -14,9 +14,9 @@ function Layout() {
           <h1 style={{ margin: 0 }}>DBT Diary Card</h1>
         </Link>
         
-        {accessToken && (
+        {user && (
           <div className="header-actions">
-            {user && <img src={user.picture} alt={user.name} className="user-avatar" />}
+            {user.photoURL && <img src={user.photoURL} alt={user.displayName} className="user-avatar" />}
             <button 
               onClick={logout} 
               className="secondary" 

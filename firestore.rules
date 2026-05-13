@@ -1,0 +1,43 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // User Profiles
+    match /users/{userId} {
+      // Allow a user to read and write their own profile
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow any authenticated user to read profiles (needed for sharing/lookup)
+      allow read: if request.auth != null; 
+    }
+
+    // Roster Collection (Under Clinician)
+    match /users/{userId}/roster/{patientId} {
+      // Clinician can read/write their own roster
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Patient can write themselves into a clinician's roster (via invite link)
+      allow write: if request.auth != null && request.auth.uid == patientId;
+    }
+
+    // Templates
+    match /users/{userId}/templates/{document=**} {
+      // User can read/write their own templates
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Clinician can read/write templates if the user is in their roster
+      allow read, write: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)/roster/$(userId));
+    }
+
+    // Diary Cards
+    match /users/{userId}/diaryCards/{document=**} {
+      // User can read/write their own entries
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Clinician can READ entries if the user is in their roster (Clinicians cannot modify patient entries)
+      allow read: if request.auth != null && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)/roster/$(userId));
+    }
+  }
+}
