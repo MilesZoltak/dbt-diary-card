@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Activity, Users, Loader2, AlertCircle, Share2, Mail, CheckCircle2, User as UserIcon, X, ClipboardList } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { Activity, Users, Loader2, AlertCircle, Share2, CheckCircle2, User as UserIcon, ClipboardList } from 'lucide-react';
 import { useAuth } from '../contexts/GoogleAuthContext';
 import FirestoreService from '../services/FirestoreService';
 import ClinicianView from '../components/ClinicianView';
 
 function ClinicianPage() {
   const { user, profile, loading: authLoading } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
   
   const queryParams = new URLSearchParams(location.search);
@@ -24,27 +23,10 @@ function ClinicianPage() {
   // Clinician role state
   const [patientsList, setPatientsList] = useState([]);
 
-  // Patient role state (sharing) - now deprecated, using Clinician Invite Link
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteLink, setInviteLink] = useState('');
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (user && profile) {
-      if (profile.role === 'clinician' && viewMode === 'patients') {
-        loadPatientsList();
-      } else {
-        // Load personal dashboard
-        loadFirestoreData(user.uid);
-      }
-    }
-  }, [user, profile, viewMode]);
-
-  useEffect(() => {
-    if (profile?.role === 'clinician' && viewMode === 'patients' && selectedPatientUid) {
-      loadFirestoreData(selectedPatientUid);
-    }
-  }, [selectedPatientUid, profile, viewMode]);
+  // Copied state for the Clinician Code
+  const [copiedCode, setCopiedCode] = useState(false);
+  
+  // Patient-initiated join logic removed for security (inversion of control)
 
   const loadPatientsList = async () => {
     setLoading(true);
@@ -76,18 +58,33 @@ function ClinicianPage() {
     }
   };
 
-  const handleGenerateInvite = () => {
+  useEffect(() => {
+    if (user && profile) {
+      if (profile.role === 'clinician' && viewMode === 'patients') {
+        loadPatientsList();
+      } else {
+        // Load personal dashboard
+        loadFirestoreData(user.uid);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, profile, viewMode]);
+
+  useEffect(() => {
+    if (profile?.role === 'clinician' && viewMode === 'patients' && selectedPatientUid) {
+      loadFirestoreData(selectedPatientUid);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPatientUid, profile, viewMode]);
+
+  const copyCodeToClipboard = () => {
     if (!user) return;
-    const link = `${window.location.origin}/journal?invite=${user.uid}`;
-    setInviteLink(link);
-    setShowInviteModal(true);
+    navigator.clipboard.writeText(user.uid);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
   };
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(inviteLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+
 
   if (authLoading) {
     return <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}><Loader2 className="spin" size={32} color="var(--accent-primary)" /></div>;
@@ -119,13 +116,16 @@ function ClinicianPage() {
       </div>
 
       {profile.role === 'clinician' && viewMode === 'patients' && (
-        <button 
-          onClick={handleGenerateInvite}
-          className="secondary" 
-          style={{ width: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', borderRadius: '2rem', border: '1px solid var(--border-color)' }}
-        >
-          <Share2 size={18} /> Invite Patient
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+          <span>Your Code: <strong>{user.uid}</strong></span>
+          <button 
+            onClick={copyCodeToClipboard}
+            className="secondary" 
+            style={{ width: 'auto', padding: '0.4rem 0.8rem', borderRadius: '2rem', fontSize: '0.8rem' }}
+          >
+            {copiedCode ? 'Copied!' : 'Copy Code'}
+          </button>
+        </div>
       )}
     </div>
   );
@@ -137,17 +137,62 @@ function ClinicianPage() {
         <div>
           {renderHeader()}
           <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+            
+            <div className="card" style={{ 
+              marginBottom: '2.5rem', 
+              background: 'linear-gradient(135deg, var(--bg-secondary) 0%, #f0f9ff 100%)', 
+              border: '1px solid var(--accent-primary-light)', 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              padding: '1.5rem',
+              boxShadow: '0 4px 12px rgba(14, 165, 233, 0.08)'
+            }}>
+              <div>
+                <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.1rem', color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Share2 size={20} /> Your Clinician Code
+                </h3>
+                <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem', maxWidth: '400px' }}>
+                  Share this unique code with your patients. When they enter it, you'll securely gain access to their diary data.
+                </p>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ background: 'white', padding: '0.6rem 1.2rem', borderRadius: '0.75rem', border: '2px solid var(--accent-primary-light)', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)' }}>
+                  <code style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--accent-primary)', letterSpacing: '0.05em' }}>{user.uid}</code>
+                </div>
+                <button 
+                  onClick={copyCodeToClipboard}
+                  style={{ 
+                    width: 'auto', 
+                    padding: '0.75rem 1.5rem', 
+                    borderRadius: '2rem', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.5rem',
+                    background: copiedCode ? '#16a34a' : 'var(--accent-primary)',
+                    color: 'white',
+                    border: 'none',
+                    fontWeight: 600,
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  {copiedCode ? <><CheckCircle2 size={18} /> Copied!</> : <><ClipboardList size={18} /> Copy Code</>}
+                </button>
+              </div>
+            </div>
+
             <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
               <Users size={24} color="var(--accent-primary)" /> My Patients
             </h2>
-            
+
+
             {loading ? (
                <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><Loader2 className="spin" size={24} /></div>
             ) : patientsList.length === 0 ? (
               <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-                <p style={{ color: 'var(--text-secondary)' }}>No patients have shared their diary with you yet.</p>
+                <p style={{ color: 'var(--text-secondary)' }}>No patients have linked their diary with you yet.</p>
                 <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-                  Ask your patients to share using your email address: <strong>{user.email}</strong>
+                  Provide your Clinician Code (<strong>{user.uid}</strong>) to your patients. They can enter it in their Journal under "Link Therapist".
                 </p>
               </div>
             ) : (
@@ -223,36 +268,6 @@ function ClinicianPage() {
         <ClinicianView schema={schema} patientData={patientData} />
       )}
 
-      {/* INVITE MODAL */}
-      {showInviteModal && (
-        <div className="modal-overlay" onClick={() => setShowInviteModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '450px' }}>
-            <h2 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Share2 size={24} color="var(--accent-primary)" /> Invite Patient
-            </h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-              Send this secure link to your patient. When they register using this link, they will automatically be added to your roster.
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div className="form-group" style={{ margin: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--bg-secondary)', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)', wordBreak: 'break-all' }}>
-                  <code style={{ fontSize: '0.875rem' }}>{inviteLink}</code>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
-                <button onClick={() => setShowInviteModal(false)} className="secondary" style={{ flex: 1 }}>Close</button>
-                <button 
-                  onClick={copyToClipboard} 
-                  style={{ flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}
-                >
-                  {copied ? <><CheckCircle2 size={18} /> Copied!</> : 'Copy Link'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -6,5 +6,13 @@
       "**/.*",
       "**/node_modules/**"
     ]
+  },
+  "emulators": {
+    "firestore": {
+      "port": 8081
+    },
+    "ui": {
+      "enabled": true
+    }
   }
 }

@@ -8,7 +8,8 @@ import {
   getDocs, 
   orderBy, 
   limit,
-  deleteDoc
+  deleteDoc,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
@@ -44,18 +45,30 @@ class FirestoreService {
   }
 
   /**
-   * Adds a patient to a clinician's roster.
-   * This is called when a patient accepts an invite link.
+   * Adds a patient to a clinician's roster and grants the clinician access to the patient's data.
+   * This is a dual-write handshake that must be executed by the patient.
    */
-  async addToRoster(clinicianUid, patientUid, patientProfileData) {
+  async addToRoster(clinicianUid, patientUid, patientProfileData, clinicianProfileData = { displayName: 'Clinician' }) {
     try {
+      const batch = writeBatch(db);
+      
+      // 1. Add patient to clinician's roster (Index for Dashboard)
       const rosterRef = doc(db, 'users', clinicianUid, 'roster', patientUid);
-      await setDoc(rosterRef, {
+      batch.set(rosterRef, {
         ...patientProfileData,
         addedAt: new Date().toISOString()
-      });
+      }, { merge: true });
+
+      // 2. Add clinician to patient's sharedWith collection (ACL for Security)
+      const sharedWithRef = doc(db, 'users', patientUid, 'sharedWith', clinicianUid);
+      batch.set(sharedWithRef, {
+        ...clinicianProfileData,
+        addedAt: new Date().toISOString()
+      }, { merge: true });
+
+      await batch.commit();
     } catch (error) {
-      console.error('Error adding patient to roster:', error);
+      console.error('Error executing dual-write handshake:', error);
       throw error;
     }
   }
@@ -87,6 +100,47 @@ class FirestoreService {
       await deleteDoc(rosterRef);
     } catch (error) {
       console.error('Error removing patient from roster:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Gets a list of clinicians a patient is sharing data with
+   */
+  async getSharedWith(patientUid) {
+    try {
+      const sharedWithRef = collection(db, 'users', patientUid, 'sharedWith');
+      const querySnapshot = await getDocs(sharedWithRef);
+      
+      return querySnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      }));
+    } catch (error) {
+      console.error('Error fetching sharedWith list:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Revokes a clinician's access to a patient's data
+   * This is a dual-delete that removes both the ACL entry and the Roster index.
+   */
+  async revokeAccess(patientUid, clinicianUid) {
+    try {
+      const batch = writeBatch(db);
+      
+      // 1. Remove from Patient's ACL
+      const sharedWithRef = doc(db, 'users', patientUid, 'sharedWith', clinicianUid);
+      batch.delete(sharedWithRef);
+      
+      // 2. Remove from Clinician's Roster
+      const rosterRef = doc(db, 'users', clinicianUid, 'roster', patientUid);
+      batch.delete(rosterRef);
+      
+      await batch.commit();
+    } catch (error) {
+      console.error('Error revoking access:', error);
       throw error;
     }
   }
