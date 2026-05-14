@@ -16,7 +16,25 @@ function JournalView({
   readOnly = false
 }) {
   const [currentSectionIdx, setCurrentSectionIdx] = React.useState(0);
+  const [forceEdit, setForceEdit] = React.useState(false);
+  const [canSubmit, setCanSubmit] = React.useState(false);
   const totalSections = schema.length;
+
+  const currentEntry = patientData.find(d => normalizeDate(d.logicalDate || d.Date) === entryDate);
+  const isSubmitted = currentEntry?.status === 'submitted';
+  const showSuccessState = isSubmitted && !forceEdit && !readOnly;
+
+  React.useEffect(() => {
+    setForceEdit(false);
+  }, [entryDate]);
+
+  React.useEffect(() => {
+    if (currentSectionIdx === totalSections - 1) {
+      setCanSubmit(false);
+      const timer = setTimeout(() => setCanSubmit(true), 400);
+      return () => clearTimeout(timer);
+    }
+  }, [currentSectionIdx, totalSections]);
 
   const handleMultiSelectChange = (fieldId, option, checked) => {
     if (readOnly) return;
@@ -252,71 +270,86 @@ function JournalView({
           </div>
         </div>
 
-        {/* Progress Indicator */}
-        <div style={{ marginBottom: '2rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Progress</span>
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-purple)' }}>Section {currentSectionIdx + 1} of {totalSections}</span>
+        {showSuccessState ? (
+          <div style={{ textAlign: 'center', padding: '4rem 2rem', animation: 'fadeIn 0.3s ease-out' }}>
+            <div style={{ background: '#f0fdf4', width: '80px', height: '80px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem', boxShadow: '0 4px 15px rgba(22, 163, 74, 0.15)' }}>
+              <Check size={40} color="#16a34a" />
+            </div>
+            <h2 style={{ marginBottom: '0.5rem' }}>You've already logged for this day!</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '2.5rem', fontSize: '1.1rem' }}>Great job keeping up with your diary card.</p>
+            <button className="secondary" onClick={() => setForceEdit(true)} style={{ width: 'auto', padding: '0.75rem 2rem', borderRadius: '2rem' }}>
+              Review or Edit Entry
+            </button>
           </div>
-          <div style={{ height: '6px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
-            <div style={{ 
-              height: '100%', 
-              width: `${((currentSectionIdx + 1) / totalSections) * 100}%`, 
-              background: 'linear-gradient(to right, var(--accent-primary), var(--accent-purple))',
-              transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
-            }} />
-          </div>
-        </div>
-
-        <form onSubmit={(e) => { e.preventDefault(); if (!readOnly && onSubmit) onSubmit(); }}>
-          {schema.map((section, idx) => {
-            if (idx !== currentSectionIdx) return null;
-            return (
-              <div key={idx} style={{ marginBottom: '2rem', animation: 'fadeIn 0.3s ease-out' }}>
-                <div style={{ background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-purple))', color: 'white', padding: '1rem', borderRadius: '1rem', marginBottom: '1.5rem', boxShadow: '0 4px 12px rgba(14, 165, 233, 0.2)' }}>
-                  <h3 style={{ fontSize: '1.125rem', margin: 0, fontWeight: 700 }}>{section.title}</h3>
-                  {section.description && (
-                    <p style={{ fontSize: '0.875rem', opacity: 0.9, marginTop: '0.5rem', marginBottom: 0 }}>{section.description}</p>
-                  )}
-                </div>
-                {section.fields.map(field => renderField(field))}
+        ) : (
+          <>
+            {/* Progress Indicator */}
+            <div style={{ marginBottom: '2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Progress</span>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-purple)' }}>Section {currentSectionIdx + 1} of {totalSections}</span>
               </div>
-            );
-          })}
-          
-          <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
-            {currentSectionIdx > 0 && (
-              <button 
-                type="button" 
-                className="secondary" 
-                onClick={() => {
-                  setCurrentSectionIdx(prev => prev - 1);
-                  if (!readOnly && onSaveDraft) onSaveDraft();
-                }}
-                style={{ flex: 1 }}
-              >
-                Back
-              </button>
-            )}
-            
-            {currentSectionIdx < totalSections - 1 ? (
-              <button 
-                type="button" 
-                onClick={() => {
-                  setCurrentSectionIdx(prev => prev + 1);
-                  if (!readOnly && onSaveDraft) onSaveDraft();
-                }}
-                style={{ flex: 2 }}
-              >
-                Next Section
-              </button>
-            ) : (
-              <button type="submit" disabled={submitting || readOnly} style={{ flex: 2, opacity: readOnly ? 0.5 : 1 }}>
-                {submitting ? <Loader2 className="spin" size={20} /> : 'Complete Diary'}
-              </button>
-            )}
-          </div>
-        </form>
+              <div style={{ height: '6px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{ 
+                  height: '100%', 
+                  width: `${((currentSectionIdx + 1) / totalSections) * 100}%`, 
+                  background: 'linear-gradient(to right, var(--accent-primary), var(--accent-purple))',
+                  transition: 'width 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+                }} />
+              </div>
+            </div>
+
+            <form onSubmit={(e) => { e.preventDefault(); if (!readOnly && onSubmit) onSubmit(); }}>
+              {schema.map((section, idx) => {
+                if (idx !== currentSectionIdx) return null;
+                return (
+                  <div key={idx} style={{ marginBottom: '2rem', animation: 'fadeIn 0.3s ease-out' }}>
+                    <div style={{ background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-purple))', color: 'white', padding: '1rem', borderRadius: '1rem', marginBottom: '1.5rem', boxShadow: '0 4px 12px rgba(14, 165, 233, 0.2)' }}>
+                      <h3 style={{ fontSize: '1.125rem', margin: 0, fontWeight: 700 }}>{section.title}</h3>
+                      {section.description && (
+                        <p style={{ fontSize: '0.875rem', opacity: 0.9, marginTop: '0.5rem', marginBottom: 0 }}>{section.description}</p>
+                      )}
+                    </div>
+                    {section.fields.map(field => renderField(field))}
+                  </div>
+                );
+              })}
+              
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+                {currentSectionIdx > 0 && (
+                  <button 
+                    type="button" 
+                    className="secondary" 
+                    onClick={() => {
+                      setCurrentSectionIdx(prev => prev - 1);
+                      if (!readOnly && onSaveDraft) onSaveDraft();
+                    }}
+                    style={{ flex: 1 }}
+                  >
+                    Back
+                  </button>
+                )}
+                
+                {currentSectionIdx < totalSections - 1 ? (
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setCurrentSectionIdx(prev => prev + 1);
+                      if (!readOnly && onSaveDraft) onSaveDraft();
+                    }}
+                    style={{ flex: 2 }}
+                  >
+                    Next Section
+                  </button>
+                ) : (
+                  <button type="submit" disabled={submitting || readOnly || !canSubmit} style={{ flex: 2, opacity: (readOnly || !canSubmit) ? 0.5 : 1, transition: 'opacity 0.2s' }}>
+                    {submitting ? <Loader2 className="spin" size={20} /> : (isSubmitted ? 'Update Entry' : 'Complete Diary')}
+                  </button>
+                )}
+              </div>
+            </form>
+          </>
+        )}
       </div>
     </div>
   );

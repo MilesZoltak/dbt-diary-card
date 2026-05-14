@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Activity, Users, Loader2, AlertCircle, Share2, CheckCircle2, User as UserIcon, ClipboardList } from 'lucide-react';
+import { Link, useLocation, Navigate } from 'react-router-dom';
+import { Activity, Users, Loader2, AlertCircle, Share2, CheckCircle2, User as UserIcon, ClipboardList, BookOpen } from 'lucide-react';
 import { useAuth } from '../contexts/GoogleAuthContext';
 import FirestoreService from '../services/FirestoreService';
 import ClinicianView from '../components/ClinicianView';
@@ -12,7 +12,7 @@ function ClinicianPage() {
   const queryParams = new URLSearchParams(location.search);
   const viewMode = queryParams.get('view') || 'dashboard'; // 'dashboard' or 'patients'
   
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
   // Dashboard state
@@ -91,42 +91,11 @@ function ClinicianPage() {
   }
 
   if (!user || !profile) {
-    return (
-      <div style={{ textAlign: 'center', padding: '4rem' }}>
-        <h2>Please log in and select a role to access the dashboard.</h2>
-      </div>
-    );
+    return <Navigate to="/" replace />;
   }
 
-  // Common Header Toggle
   const renderHeader = () => (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-      <div className="toggle-group" style={{ margin: 0 }}>
-        <Link to="/journal" className="toggle-btn" style={{textDecoration: 'none'}}>
-          <Activity size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '0.5rem' }} /> Data Entry
-        </Link>
-        <Link to="/clinician" className={`toggle-btn ${viewMode === 'dashboard' ? 'active' : ''}`} style={{textDecoration: 'none'}}>
-          <Users size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '0.5rem' }} /> My Dashboard
-        </Link>
-        {profile.role === 'clinician' && (
-          <Link to="/clinician?view=patients" className={`toggle-btn ${viewMode === 'patients' ? 'active' : ''}`} style={{textDecoration: 'none'}}>
-            <ClipboardList size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '0.5rem' }} /> My Patients
-          </Link>
-        )}
-      </div>
-
-      {profile.role === 'clinician' && viewMode === 'patients' && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-          <span>Your Code: <strong>{user.uid}</strong></span>
-          <button 
-            onClick={copyCodeToClipboard}
-            className="secondary" 
-            style={{ width: 'auto', padding: '0.4rem 0.8rem', borderRadius: '2rem', fontSize: '0.8rem' }}
-          >
-            {copiedCode ? 'Copied!' : 'Copy Code'}
-          </button>
-        </div>
-      )}
+    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
     </div>
   );
 
@@ -140,15 +109,17 @@ function ClinicianPage() {
             
             <div className="card" style={{ 
               marginBottom: '2.5rem', 
-              background: 'linear-gradient(135deg, var(--bg-secondary) 0%, #f0f9ff 100%)', 
+              background: 'linear-gradient(135deg, var(--bg-color) 0%, #e0f2fe 100%)', 
               border: '1px solid var(--accent-primary-light)', 
               display: 'flex', 
+              flexWrap: 'wrap',
+              gap: '1.5rem',
               justifyContent: 'space-between', 
               alignItems: 'center',
               padding: '1.5rem',
               boxShadow: '0 4px 12px rgba(14, 165, 233, 0.08)'
             }}>
-              <div>
+              <div style={{ flex: '1 1 250px' }}>
                 <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.1rem', color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <Share2 size={20} /> Your Clinician Code
                 </h3>
@@ -156,9 +127,9 @@ function ClinicianPage() {
                   Share this unique code with your patients. When they enter it, you'll securely gain access to their diary data.
                 </p>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ background: 'white', padding: '0.6rem 1.2rem', borderRadius: '0.75rem', border: '2px solid var(--accent-primary-light)', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)' }}>
-                  <code style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--accent-primary)', letterSpacing: '0.05em' }}>{user.uid}</code>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', flex: '1 1 auto' }}>
+                <div style={{ background: 'white', padding: '0.6rem 1rem', borderRadius: '0.75rem', border: '2px solid var(--accent-primary-light)', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)', maxWidth: '100%' }}>
+                  <code style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--accent-primary)', letterSpacing: '0.05em', wordBreak: 'break-all' }}>{user.uid}</code>
                 </div>
                 <button 
                   onClick={copyCodeToClipboard}

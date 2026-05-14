@@ -2,9 +2,10 @@ import React from 'react';
 import { Outlet, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/GoogleAuthContext';
 import { Heart, LogOut } from 'lucide-react';
+import BottomNav from './BottomNav';
 
 function Layout() {
-  const { user, accessToken, logout } = useAuth();
+  const { user, logout } = useAuth();
 
   return (
     <div className="app-container">
@@ -14,8 +15,11 @@ function Layout() {
           <h1 style={{ margin: 0 }}>DBT Diary Card</h1>
         </Link>
         
+        <BottomNav />
+        
         {user && (
           <div className="header-actions">
+            <div id="header-actions-portal"></div>
             {user.photoURL && <img src={user.photoURL} alt={user.displayName} className="user-avatar" />}
             <button 
               onClick={logout} 
@@ -29,7 +33,9 @@ function Layout() {
       </header>
 
       {/* Main Content Area */}
-      <Outlet />
+      <div className="main-content">
+        <Outlet />
+      </div>
     </div>
   );
 }

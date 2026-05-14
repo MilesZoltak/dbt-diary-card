@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Activity, Users, Loader2, AlertCircle, ClipboardList, Share2, CheckCircle2 } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Link, Navigate } from 'react-router-dom';
+import { Activity, Users, Loader2, AlertCircle, ClipboardList, Share2, CheckCircle2, BookOpen } from 'lucide-react';
 import { useAuth } from '../contexts/GoogleAuthContext';
 import FirestoreService from '../services/FirestoreService';
 import SchemaService from '../services/SchemaService';
@@ -11,7 +12,7 @@ import { dbtSchema as defaultDbtSchema } from '../config/dbtSchema';
 function JournalPage() {
   const { user, profile, loading: authLoading } = useAuth();
   
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   
@@ -222,53 +223,35 @@ function JournalPage() {
   }
 
   if (!user || !profile) {
-    return (
-      <div style={{ textAlign: 'center', padding: '4rem' }}>
-        <h2>Please log in and select a role to access your diary.</h2>
-      </div>
-    );
+    return <Navigate to="/" replace />;
   }
 
   return (
     <div>
-      <div className="toggle-group" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <Link to="/journal" className="toggle-btn active" style={{textDecoration: 'none'}}>
-            <Activity size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '0.5rem' }} /> Data Entry
-          </Link>
-          <Link to="/clinician" className="toggle-btn" style={{textDecoration: 'none'}}>
-            <Users size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '0.5rem' }} /> My Dashboard
-          </Link>
-          {profile.role === 'clinician' && (
-            <Link to="/clinician?view=patients" className="toggle-btn" style={{textDecoration: 'none'}}>
-              <ClipboardList size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '0.5rem' }} /> My Patients
-            </Link>
-          )}
-        </div>
+      <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+
         
-        {profile.role === 'patient' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            {sharedWithList.length > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: '0.4rem 0.8rem', borderRadius: '2rem', border: '1px solid var(--border-color)' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                  <CheckCircle2 size={14} color="#16a34a" /> Linked: <strong>{sharedWithList[0].displayName}</strong>
-                </span>
-                <button 
-                  onClick={() => handleRevokeAccess(sharedWithList[0].id)}
-                  style={{ background: 'transparent', border: 'none', padding: 0, color: 'var(--danger)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', marginLeft: '0.25rem' }}
-                >
-                  Unlink
-                </button>
-              </div>
-            )}
-            <button 
-              onClick={handleLinkClinician}
-              className="secondary" 
-              style={{ width: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.2rem', borderRadius: '2rem', border: '1px solid var(--border-color)' }}
-            >
-              <Share2 size={18} /> Link Therapist
-            </button>
-          </div>
+        {profile.role === 'patient' && document.getElementById('header-actions-portal') && createPortal(
+          <button 
+            onClick={handleLinkClinician}
+            className="secondary" 
+            style={{ 
+              width: 'auto', 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '0.5rem', 
+              padding: '0.6rem 1.2rem', 
+              borderRadius: '2rem', 
+              border: sharedWithList.length > 0 ? '1px solid var(--accent-purple-light)' : '1px solid var(--border-color)',
+              background: sharedWithList.length > 0 ? 'var(--accent-purple-light)' : 'transparent',
+              color: sharedWithList.length > 0 ? 'var(--accent-purple)' : 'var(--text-secondary)',
+              fontWeight: 600
+            }}
+          >
+            <Share2 size={18} /> 
+            {sharedWithList.length > 0 ? `Shared with ${sharedWithList.length} Clinician${sharedWithList.length > 1 ? 's' : ''}` : 'Share Diary'}
+          </button>,
+          document.getElementById('header-actions-portal')
         )}
       </div>
 
@@ -307,13 +290,36 @@ function JournalPage() {
               </div>
             ) : (
               <>
+                {sharedWithList.length > 0 && (
+                  <div style={{ marginBottom: '2rem' }}>
+                    <h3 style={{ fontSize: '1rem', margin: '0 0 1rem 0' }}>Currently Shared With</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {sharedWithList.map(clinician => (
+                        <div key={clinician.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', background: '#f8fafc', borderRadius: '1rem', border: '1px solid var(--border-color)' }}>
+                          <div>
+                            <strong style={{ display: 'block', fontSize: '0.9rem' }}>{clinician.displayName}</strong>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{clinician.email}</span>
+                          </div>
+                          <button 
+                            onClick={() => handleRevokeAccess(clinician.id)}
+                            style={{ background: '#fef2f2', color: 'var(--danger)', border: 'none', padding: '0.4rem 0.8rem', borderRadius: '2rem', fontSize: '0.8rem', fontWeight: 600, width: 'auto' }}
+                            disabled={linking}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <h3 style={{ fontSize: '1rem', margin: '0 0 0.5rem 0' }}>Add New Clinician</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-                  Enter the unique Clinician Code provided by your therapist to securely share your diary data with them.
+                  Enter the unique Clinician Code provided by your therapist.
                 </p>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   <div className="form-group" style={{ margin: 0 }}>
-                    <label style={{ fontSize: '0.8rem', marginBottom: '0.5rem', display: 'block' }}>Clinician Code</label>
                     <input 
                       type="text" 
                       placeholder="Paste code here..."
@@ -335,7 +341,7 @@ function JournalPage() {
                       style={{ flex: 1 }}
                       disabled={linking}
                     >
-                      Cancel
+                      Close
                     </button>
                     <button 
                       onClick={() => processHandshake(clinicianCode)} 
