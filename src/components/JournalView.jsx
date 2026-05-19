@@ -307,7 +307,7 @@ function JournalView({
                     <div style={{ background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-purple))', color: 'white', padding: '1rem', borderRadius: '1rem', marginBottom: '1.5rem', boxShadow: '0 4px 12px rgba(14, 165, 233, 0.2)' }}>
                       <h3 style={{ fontSize: '1.125rem', margin: 0, fontWeight: 700 }}>{section.title}</h3>
                       {section.description && (
-                        <p style={{ fontSize: '0.875rem', opacity: 0.9, marginTop: '0.5rem', marginBottom: 0 }}>{section.description}</p>
+                        <p style={{ fontSize: '0.875rem', opacity: 0.9, marginTop: '0.5rem', marginBottom: 0, whiteSpace: 'pre-wrap' }}>{section.description}</p>
                       )}
                     </div>
                     {section.fields.map(field => renderField(field))}
