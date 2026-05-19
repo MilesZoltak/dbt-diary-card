@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Save, Plus, Trash2, Edit2, Loader2, GripVertical, Settings, Eye, Dices, Activity, Users, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/GoogleAuthContext';
 import FirestoreService from '../services/FirestoreService';
@@ -20,7 +20,8 @@ const PRIMITIVE_TYPES = [
 
 function BuilderPage() {
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
+  const [searchParams] = useSearchParams();
+  const { user, profile, loading: authLoading } = useAuth();
   
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -40,28 +41,43 @@ function BuilderPage() {
   const [mockEntryDate, setMockEntryDate] = useState(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
-    if (user) {
+    if (user && profile) {
       loadSchema();
     } else if (!authLoading) {
       // If not logged in and not loading auth, default to template
       setSchema(JSON.parse(JSON.stringify(defaultDbtSchema)));
     }
-  }, [user, authLoading]);
+  }, [user, profile, authLoading]);
 
   const loadSchema = async () => {
     setLoading(true);
     try {
-      let activeTemplate = await FirestoreService.fetchActiveTemplate(user.uid);
-      if (activeTemplate) {
+      const templateIdParam = searchParams.get('id');
+      let targetTemplate = null;
+      
+      if (templateIdParam) {
+        targetTemplate = await FirestoreService.fetchTemplate(user.uid, templateIdParam);
+      } else {
+        // Only load active template by default for patients
+        if (profile?.role === 'patient') {
+          targetTemplate = await FirestoreService.fetchActiveTemplate(user.uid);
+        }
+      }
+
+      if (targetTemplate) {
         setTemplateMetadata({ 
-          id: activeTemplate.id, 
-          name: activeTemplate.name || 'Custom Template', 
-          version: activeTemplate.version || 1 
+          id: targetTemplate.id, 
+          name: targetTemplate.name || 'Custom Template', 
+          version: targetTemplate.version || 1 
         });
-        setSchema(activeTemplate.sections || []);
+        setSchema(targetTemplate.sections || []);
       } else {
         setSchema(JSON.parse(JSON.stringify(defaultDbtSchema)));
-        setTemplateMetadata({ id: `tmpl_${Date.now()}`, name: 'Standard DBT Template', version: 1 });
+        setTemplateMetadata({ 
+          id: `tmpl_${Date.now()}`, 
+          name: profile?.role === 'clinician' ? 'Clinician DBT Template' : 'Standard DBT Template', 
+          version: 0 
+        });
       }
     } catch (err) {
       console.error(err);
@@ -81,8 +97,15 @@ function BuilderPage() {
         version: templateMetadata.version + 1, // Increment version on save
         sections: schema
       };
-      await FirestoreService.saveTemplate(user.uid, templateMetadata.id, templateData, true);
-      navigate(`/journal`);
+      // Clinician templates are not set active for themselves, only patient templates are made active
+      const makeActive = profile?.role !== 'clinician';
+      await FirestoreService.saveTemplate(user.uid, templateMetadata.id, templateData, makeActive);
+      
+      if (profile?.role === 'clinician') {
+        navigate(`/clinician`);
+      } else {
+        navigate(`/journal`);
+      }
     } catch (err) {
       console.error(err);
       setError("Failed to save schema: " + err.message);
@@ -167,16 +190,23 @@ function BuilderPage() {
       
       {/* HEADER */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginBottom: '2.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', width: '100%' }}>
           <div>
-            <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.75rem', fontWeight: 800 }}>
-              <Settings size={28} color="var(--accent-primary)"/> {templateMetadata.name}
-            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Settings size={28} color="var(--accent-primary)"/>
+              <input 
+                type="text" 
+                value={templateMetadata.name} 
+                onChange={e => setTemplateMetadata(prev => ({ ...prev, name: e.target.value }))}
+                style={{ fontSize: '1.75rem', fontWeight: 800, border: 'none', borderBottom: '2px solid var(--border-color)', background: 'transparent', padding: '0.25rem 0.5rem', borderRadius: 0, outline: 'none', width: '100%', maxWidth: '400px', color: 'var(--text-primary)' }}
+                placeholder="Template Name"
+              />
+            </div>
             <p style={{ color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', fontSize: '0.875rem' }}>Version {templateMetadata.version} • Customize your diary structure</p>
           </div>
 
           <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <Link to="/journal" className="secondary" style={{ padding: '0.5rem 1rem', textDecoration: 'none', borderRadius: '2rem', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', fontSize: '0.875rem', fontWeight: 600 }}>
+            <Link to={profile?.role === 'clinician' ? "/clinician" : "/journal"} className="secondary" style={{ padding: '0.5rem 1rem', textDecoration: 'none', borderRadius: '2rem', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', fontSize: '0.875rem', fontWeight: 600 }}>
               <ArrowLeft size={16} style={{ marginRight: '0.5rem' }} /> Back
             </Link>
           </div>

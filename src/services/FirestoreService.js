@@ -146,6 +146,23 @@ class FirestoreService {
   }
 
   /**
+   * Fetches a specific template by ID
+   */
+  async fetchTemplate(userId, templateId) {
+    try {
+      const docRef = doc(db, 'users', userId, 'templates', templateId);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() };
+      }
+      return null;
+    } catch (error) {
+      console.error('Error fetching specific template:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Fetches the active template for a user
    */
   async fetchActiveTemplate(userId) {
@@ -160,6 +177,81 @@ class FirestoreService {
       return null;
     } catch (error) {
       console.error('Error fetching active template:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetches all templates for a user, sorted by updatedAt
+   */
+  async fetchTemplates(userId) {
+    try {
+      const templatesRef = collection(db, 'users', userId, 'templates');
+      const q = query(templatesRef, orderBy('updatedAt', 'desc'));
+      const querySnapshot = await getDocs(q);
+      
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      // Fallback if sorting requires index or fails
+      try {
+        const querySnapshot = await getDocs(templatesRef);
+        return querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+      } catch (err) {
+        console.error('Error fetching templates fallback:', err);
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * Assigns a clinician's template to a patient.
+   * This is a batch write that deactivates the patient's existing templates,
+   * copies the clinician's template to the patient's template subcollection,
+   * and updates the clinician's roster document with the active template metadata.
+   */
+  async assignTemplateToPatient(clinicianUid, patientId, template) {
+    try {
+      const batch = writeBatch(db);
+      
+      // 1. Fetch patient's active templates to deactivate them
+      const templatesRef = collection(db, 'users', patientId, 'templates');
+      const q = query(templatesRef, where('isActive', '==', true));
+      const activeSnaps = await getDocs(q);
+      
+      activeSnaps.docs.forEach(docSnap => {
+        batch.set(docSnap.ref, { isActive: false }, { merge: true });
+      });
+
+      // 2. Write the template copy directly into the patient's template subcollection
+      const newTemplateRef = doc(db, 'users', patientId, 'templates', template.id);
+      batch.set(newTemplateRef, {
+        name: template.name,
+        sections: template.sections,
+        version: template.version || 1,
+        isActive: true,
+        assignedBy: clinicianUid,
+        assignedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+
+      // 3. Update clinician roster entry with template metadata
+      const rosterRef = doc(db, 'users', clinicianUid, 'roster', patientId);
+      batch.set(rosterRef, {
+        assignedTemplateId: template.id,
+        assignedTemplateName: template.name,
+        assignedTemplateVersion: template.version || 1,
+        assignedAt: new Date().toISOString()
+      }, { merge: true });
+
+      await batch.commit();
+    } catch (error) {
+      console.error('Error assigning template to patient:', error);
       throw error;
     }
   }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, Navigate } from 'react-router-dom';
-import { Activity, Users, Loader2, AlertCircle, Share2, CheckCircle2, User as UserIcon, ClipboardList, BookOpen } from 'lucide-react';
+import { Activity, Users, Loader2, AlertCircle, Share2, CheckCircle2, User as UserIcon, ClipboardList, BookOpen, Plus, Trash2, Edit2, X } from 'lucide-react';
 import { useAuth } from '../contexts/GoogleAuthContext';
 import FirestoreService from '../services/FirestoreService';
 import ClinicianView from '../components/ClinicianView';
@@ -22,6 +22,9 @@ function ClinicianPage() {
   
   // Clinician role state
   const [patientsList, setPatientsList] = useState([]);
+  const [clinicianTemplates, setClinicianTemplates] = useState([]);
+  const [subTab, setSubTab] = useState('patients'); // 'patients' or 'templates'
+  const [assigningPatient, setAssigningPatient] = useState(null);
 
   // Copied state for the Clinician Code
   const [copiedCode, setCopiedCode] = useState(false);
@@ -36,6 +39,31 @@ function ClinicianPage() {
     } catch (err) {
       console.error(err);
       setError("Failed to load patients list: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadClinicianTemplates = async () => {
+    try {
+      const templates = await FirestoreService.fetchTemplates(user.uid);
+      setClinicianTemplates(templates);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load templates: " + err.message);
+    }
+  };
+
+  const handleAssignTemplate = async (template) => {
+    if (!assigningPatient) return;
+    setLoading(true);
+    try {
+      await FirestoreService.assignTemplateToPatient(user.uid, assigningPatient.id, template);
+      setAssigningPatient(null);
+      await loadPatientsList(); // Reload patient roster to get new template metadata
+    } catch (err) {
+      console.error(err);
+      setError("Failed to assign template: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -62,6 +90,7 @@ function ClinicianPage() {
     if (user && profile) {
       if (profile.role === 'clinician' && viewMode === 'patients') {
         loadPatientsList();
+        loadClinicianTemplates();
       } else {
         // Load personal dashboard
         loadFirestoreData(user.uid);
@@ -93,6 +122,125 @@ function ClinicianPage() {
   if (!user || !profile) {
     return <Navigate to="/" replace />;
   }
+
+  const renderAssignModal = () => {
+    if (!assigningPatient) return null;
+    
+    return (
+      <div 
+        style={{ 
+          position: 'fixed', 
+          top: 0, 
+          left: 0, 
+          right: 0, 
+          bottom: 0, 
+          background: 'rgba(0,0,0,0.5)', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          zIndex: 1000, 
+          padding: '1rem',
+          backdropFilter: 'blur(4px)'
+        }}
+        onClick={() => setAssigningPatient(null)}
+      >
+        <div 
+          className="card" 
+          style={{ 
+            width: '100%', 
+            maxWidth: '500px', 
+            maxHeight: '80vh', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            padding: '2rem', 
+            borderRadius: '1.5rem',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15)',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>Assign Template</h3>
+            <button 
+              onClick={() => setAssigningPatient(null)} 
+              className="secondary" 
+              style={{ width: 'auto', padding: '0.4rem', border: 'none', background: 'transparent' }}
+            >
+              <X size={20} color="var(--text-secondary)" />
+            </button>
+          </div>
+          
+          <p style={{ margin: '0 0 1.5rem 0', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+            Select a custom diary card template to assign to <strong>{assigningPatient.displayName || 'this patient'}</strong>. Their active template will update immediately.
+          </p>
+          
+          {/* Body */}
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem', paddingRight: '0.25rem' }}>
+            {clinicianTemplates.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem 1rem', background: '#f8fafc', borderRadius: '1rem', border: '1px dashed var(--border-color)' }}>
+                <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem' }}>You haven't created any custom templates yet.</p>
+                <Link 
+                  to="/builder" 
+                  className="button" 
+                  style={{ textDecoration: 'none', display: 'inline-flex', marginTop: '1rem', padding: '0.5rem 1.2rem', borderRadius: '2rem', fontSize: '0.85rem' }}
+                >
+                  <Plus size={16} style={{ marginRight: '0.4rem' }} /> Create One Now
+                </Link>
+              </div>
+            ) : (
+              clinicianTemplates.map(template => (
+                <div 
+                  key={template.id} 
+                  style={{ 
+                    padding: '1rem', 
+                    borderRadius: '1rem', 
+                    border: '1px solid var(--border-color)', 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    background: 'white',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <div style={{ flex: 1, paddingRight: '0.5rem' }}>
+                    <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700 }}>{template.name}</h4>
+                    <p style={{ margin: '0.15rem 0 0 0', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                      Version {template.version || 1} • {template.sections?.length || 0} sections
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => handleAssignTemplate(template)}
+                    className="button"
+                    style={{ 
+                      width: 'auto', 
+                      padding: '0.4rem 1rem', 
+                      borderRadius: '2rem', 
+                      fontSize: '0.8rem', 
+                      fontWeight: 600 
+                    }}
+                  >
+                    Assign
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+          
+          {/* Footer */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+            <button 
+              onClick={() => setAssigningPatient(null)} 
+              className="secondary" 
+              style={{ width: 'auto', padding: '0.6rem 1.5rem', borderRadius: '2rem' }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderHeader = () => (
     <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
@@ -152,43 +300,171 @@ function ClinicianPage() {
               </div>
             </div>
 
-            <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
-              <Users size={24} color="var(--accent-primary)" /> My Patients
-            </h2>
+            {/* Sub-tabs menu */}
+            <div className="toggle-group" style={{ margin: '0 0 2rem 0', display: 'flex', gap: '0.5rem', alignSelf: 'flex-start' }}>
+              <button 
+                className={`toggle-btn ${subTab === 'patients' ? 'active' : ''}`} 
+                onClick={() => setSubTab('patients')}
+                style={{ padding: '0.6rem 1.5rem', fontWeight: 600 }}
+              >
+                <Users size={16} style={{ display: 'inline', marginRight: '0.5rem', verticalAlign: 'text-bottom' }} />
+                Patients ({patientsList.length})
+              </button>
+              <button 
+                className={`toggle-btn ${subTab === 'templates' ? 'active' : ''}`} 
+                onClick={() => setSubTab('templates')}
+                style={{ padding: '0.6rem 1.5rem', fontWeight: 600 }}
+              >
+                <ClipboardList size={16} style={{ display: 'inline', marginRight: '0.5rem', verticalAlign: 'text-bottom' }} />
+                Templates ({clinicianTemplates.length})
+              </button>
+            </div>
 
+            {/* Tab contents */}
+            {subTab === 'patients' ? (
+              <div>
+                <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' }}>
+                  <Users size={24} color="var(--accent-primary)" /> My Patients
+                </h2>
 
-            {loading ? (
-               <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><Loader2 className="spin" size={24} /></div>
-            ) : patientsList.length === 0 ? (
-              <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-                <p style={{ color: 'var(--text-secondary)' }}>No patients have linked their diary with you yet.</p>
-                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-                  Provide your Clinician Code (<strong>{user.uid}</strong>) to your patients. They can enter it in their Journal under "Link Therapist".
-                </p>
+                {loading ? (
+                   <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><Loader2 className="spin" size={24} /></div>
+                ) : patientsList.length === 0 ? (
+                  <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+                    <p style={{ color: 'var(--text-secondary)' }}>No patients have linked their diary with you yet.</p>
+                    <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                      Provide your Clinician Code (<strong>{user.uid}</strong>) to your patients. They can enter it in their Journal under "Link Therapist".
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {patientsList.map(patient => (
+                      <div 
+                        key={patient.id} 
+                        className="card" 
+                        style={{ cursor: 'pointer', padding: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.2s', border: '1px solid var(--border-color)' }}
+                        onClick={() => setSelectedPatientUid(patient.id)}
+                        onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-primary)'}
+                        onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border-color)'}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                          <div style={{ background: 'var(--accent-primary-light)', padding: '0.75rem', borderRadius: '50%' }}>
+                            <UserIcon size={24} color="var(--accent-primary)" />
+                          </div>
+                          <div>
+                            <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{patient.displayName || 'Anonymous Patient'}</h3>
+                            <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>{patient.email}</p>
+                            
+                            <div style={{ marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--accent-purple)', background: 'var(--accent-purple-light)', padding: '0.1rem 0.6rem', borderRadius: '1rem', fontWeight: 600 }}>
+                                Template: {patient.assignedTemplateName || 'Default DBT Template'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent opening patient dashboard
+                            setAssigningPatient(patient);
+                          }}
+                          className="secondary"
+                          style={{ 
+                            width: 'auto', 
+                            padding: '0.5rem 1.2rem', 
+                            borderRadius: '2rem', 
+                            fontSize: '0.85rem', 
+                            fontWeight: 600, 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: '0.4rem' 
+                          }}
+                        >
+                          <ClipboardList size={16} />
+                          Assign Template
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {patientsList.map(patient => (
-                  <div 
-                    key={patient.id} 
-                    className="card" 
-                    style={{ cursor: 'pointer', padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', transition: 'all 0.2s', border: '1px solid var(--border-color)' }}
-                    onClick={() => setSelectedPatientUid(patient.id)}
-                    onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--accent-primary)'}
-                    onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border-color)'}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+                    <ClipboardList size={24} color="var(--accent-primary)" /> Templates Library
+                  </h2>
+                  <Link 
+                    to="/builder" 
+                    className="button" 
+                    style={{ 
+                      textDecoration: 'none', 
+                      padding: '0.6rem 1.2rem', 
+                      borderRadius: '2rem', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.5rem',
+                      fontSize: '0.9rem',
+                      fontWeight: 600
+                    }}
                   >
-                    <div style={{ background: 'var(--accent-primary-light)', padding: '0.75rem', borderRadius: '50%' }}>
-                      <UserIcon size={24} color="var(--accent-primary)" />
-                    </div>
-                    <div>
-                      <h3 style={{ margin: 0, fontSize: '1.1rem' }}>{patient.displayName || 'Anonymous Patient'}</h3>
-                      <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>{patient.email}</p>
-                    </div>
+                    <Plus size={18} /> Create Template
+                  </Link>
+                </div>
+                
+                {clinicianTemplates.length === 0 ? (
+                  <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
+                    <p style={{ color: 'var(--text-secondary)' }}>You haven't created any custom templates yet.</p>
+                    <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                      Click "Create Template" above to launch the Visual Builder and customize schemas.
+                    </p>
                   </div>
-                ))}
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '1rem' }}>
+                    {clinicianTemplates.map(template => (
+                      <div key={template.id} className="card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '1rem', border: '1px solid var(--border-color)' }}>
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>{template.name || 'Untitled Template'}</h4>
+                          <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                            Version {template.version || 1} • Last updated {template.updatedAt ? new Date(template.updatedAt).toLocaleDateString() : 'Unknown'}
+                          </p>
+                          <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--accent-primary)', background: 'var(--accent-primary-light)', padding: '0.1rem 0.6rem', borderRadius: '1rem', fontWeight: 600 }}>
+                              {template.sections?.length || 0} Sections
+                            </span>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', background: 'var(--bg-secondary)', padding: '0.1rem 0.6rem', borderRadius: '1rem', fontWeight: 600 }}>
+                              {template.sections?.reduce((sum, s) => sum + (s.fields?.length || 0), 0) || 0} Fields
+                            </span>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <Link 
+                            to={`/builder?id=${template.id}`} 
+                            className="secondary" 
+                            style={{ 
+                              flex: 1, 
+                              textDecoration: 'none', 
+                              padding: '0.5rem', 
+                              borderRadius: '2rem', 
+                              fontSize: '0.85rem', 
+                              fontWeight: 600, 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center', 
+                              gap: '0.4rem' 
+                            }}
+                          >
+                            <Edit2 size={16} /> Edit Template
+                          </Link>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
+          {renderAssignModal()}
         </div>
       );
     }

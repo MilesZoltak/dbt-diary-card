@@ -22,7 +22,7 @@ service cloud.firestore {
     // We match specific collections to avoid interfering with owner rules
     
     match /users/{userId}/templates/{document=**} {
-      allow read: if request.auth != null && 
+      allow read, write: if request.auth != null && 
         exists(/databases/$(database)/documents/users/$(userId)/sharedWith/$(request.auth.uid));
     }
 
