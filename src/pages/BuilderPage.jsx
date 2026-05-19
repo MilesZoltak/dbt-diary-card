@@ -53,10 +53,15 @@ function BuilderPage() {
     setLoading(true);
     try {
       const templateIdParam = searchParams.get('id');
+      const cloneIdParam = searchParams.get('clone');
       let targetTemplate = null;
+      let isClone = false;
       
       if (templateIdParam) {
         targetTemplate = await FirestoreService.fetchTemplate(user.uid, templateIdParam);
+      } else if (cloneIdParam) {
+        targetTemplate = await FirestoreService.fetchTemplate(user.uid, cloneIdParam);
+        isClone = true;
       } else {
         // Only load active template by default for patients
         if (profile?.role === 'patient') {
@@ -66,9 +71,9 @@ function BuilderPage() {
 
       if (targetTemplate) {
         setTemplateMetadata({ 
-          id: targetTemplate.id, 
-          name: targetTemplate.name || 'Custom Template', 
-          version: targetTemplate.version || 1 
+          id: isClone ? `tmpl_${Date.now()}` : targetTemplate.id, 
+          name: isClone ? `${targetTemplate.name} - Copy` : (targetTemplate.name || 'Custom Template'), 
+          version: isClone ? 0 : (targetTemplate.version || 1) 
         });
         setSchema(targetTemplate.sections || []);
       } else {
@@ -92,11 +97,23 @@ function BuilderPage() {
     setSaving(true);
     setError(null);
     try {
+      // 1. Enforce Template Name Uniqueness
+      const currentTemplates = await FirestoreService.fetchTemplates(user.uid);
+      const isDuplicateName = currentTemplates.some(
+        t => t.name.trim().toLowerCase() === templateMetadata.name.trim().toLowerCase() && t.id !== templateMetadata.id
+      );
+
+      if (isDuplicateName) {
+        throw new Error("A template with this name already exists. Please choose a unique name.");
+      }
+
+      // 2. Build and Save Template
       const templateData = {
-        name: templateMetadata.name,
+        name: templateMetadata.name.trim(),
         version: templateMetadata.version + 1, // Increment version on save
         sections: schema
       };
+      
       // Clinician templates are not set active for themselves, only patient templates are made active
       const makeActive = profile?.role !== 'clinician';
       await FirestoreService.saveTemplate(user.uid, templateMetadata.id, templateData, makeActive);

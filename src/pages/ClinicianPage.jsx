@@ -25,6 +25,8 @@ function ClinicianPage() {
   const [clinicianTemplates, setClinicianTemplates] = useState([]);
   const [subTab, setSubTab] = useState('patients'); // 'patients' or 'templates'
   const [assigningPatient, setAssigningPatient] = useState(null);
+  const [assigningTemplate, setAssigningTemplate] = useState(null);
+  const [emailVerification, setEmailVerification] = useState("");
 
   // Copied state for the Clinician Code
   const [copiedCode, setCopiedCode] = useState(false);
@@ -54,13 +56,22 @@ function ClinicianPage() {
     }
   };
 
-  const handleAssignTemplate = async (template) => {
-    if (!assigningPatient) return;
+  const handleAssignTemplate = async () => {
+    if (!assigningPatient || !assigningTemplate) return;
     setLoading(true);
     try {
-      await FirestoreService.assignTemplateToPatient(user.uid, assigningPatient.id, template);
+      await FirestoreService.assignTemplateToPatient(user.uid, assigningPatient.id, assigningTemplate);
       setAssigningPatient(null);
+      setAssigningTemplate(null);
+      setEmailVerification("");
       await loadPatientsList(); // Reload patient roster to get new template metadata
+    } catch (err) {
+      console.error(err);
+      setError("Failed to assign template: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
     } catch (err) {
       console.error(err);
       setError("Failed to assign template: " + err.message);
@@ -126,6 +137,21 @@ function ClinicianPage() {
   const renderAssignModal = () => {
     if (!assigningPatient) return null;
     
+    // Check if the currently selected template is assigned to another patient
+    let multiAssignmentWarning = null;
+    if (assigningTemplate) {
+      const otherPatientsUsingIt = patientsList.filter(p => p.assignedTemplateId === assigningTemplate.id && p.id !== assigningPatient.id);
+      if (otherPatientsUsingIt.length > 0) {
+        multiAssignmentWarning = `This template is currently assigned to ${otherPatientsUsingIt.map(p => p.displayName || p.email).join(', ')}. If this template contains personal information tailored for them, please Cancel and Duplicate it instead.`;
+      }
+    }
+
+    const handleCloseModal = () => {
+      setAssigningPatient(null);
+      setAssigningTemplate(null);
+      setEmailVerification("");
+    };
+
     return (
       <div 
         style={{ 
@@ -142,7 +168,7 @@ function ClinicianPage() {
           padding: '1rem',
           backdropFilter: 'blur(4px)'
         }}
-        onClick={() => setAssigningPatient(null)}
+        onClick={handleCloseModal}
       >
         <div 
           className="card" 
@@ -161,9 +187,11 @@ function ClinicianPage() {
         >
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>Assign Template</h3>
+            <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>
+              {assigningTemplate ? "Confirm Assignment" : "Assign Template"}
+            </h3>
             <button 
-              onClick={() => setAssigningPatient(null)} 
+              onClick={handleCloseModal} 
               className="secondary" 
               style={{ width: 'auto', padding: '0.4rem', border: 'none', background: 'transparent' }}
             >
@@ -171,71 +199,126 @@ function ClinicianPage() {
             </button>
           </div>
           
-          <p style={{ margin: '0 0 1.5rem 0', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-            Select a custom diary card template to assign to <strong>{assigningPatient.displayName || 'this patient'}</strong>. Their active template will update immediately.
-          </p>
-          
           {/* Body */}
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem', paddingRight: '0.25rem' }}>
-            {clinicianTemplates.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '2rem 1rem', background: '#f8fafc', borderRadius: '1rem', border: '1px dashed var(--border-color)' }}>
-                <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem' }}>You haven't created any custom templates yet.</p>
-                <Link 
-                  to="/builder" 
-                  className="button" 
-                  style={{ textDecoration: 'none', display: 'inline-flex', marginTop: '1rem', padding: '0.5rem 1.2rem', borderRadius: '2rem', fontSize: '0.85rem' }}
-                >
-                  <Plus size={16} style={{ marginRight: '0.4rem' }} /> Create One Now
-                </Link>
+            {assigningTemplate ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <p style={{ margin: '0 0 0.5rem 0', color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
+                  You are about to assign <strong>{assigningTemplate.name}</strong> to <strong>{assigningPatient.displayName || 'this patient'}</strong>.
+                </p>
+
+                {multiAssignmentWarning && (
+                  <div style={{ padding: '1rem', background: '#fef2f2', border: '1px solid #f87171', color: '#b91c1c', borderRadius: '0.75rem', fontSize: '0.85rem', fontWeight: 600 }}>
+                    ⚠️ WARNING: {multiAssignmentWarning}
+                  </div>
+                )}
+
+                <div style={{ background: '#f8fafc', padding: '1rem', borderRadius: '0.75rem', border: '1px solid var(--border-color)' }}>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                    Type their exact email to confirm: <br/><span style={{ userSelect: 'all', color: 'var(--accent-primary)' }}>{assigningPatient.email}</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={emailVerification}
+                    onChange={(e) => setEmailVerification(e.target.value)}
+                    placeholder="patient@example.com"
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)', fontSize: '1rem' }}
+                  />
+                </div>
               </div>
             ) : (
-              clinicianTemplates.map(template => (
-                <div 
-                  key={template.id} 
-                  style={{ 
-                    padding: '1rem', 
-                    borderRadius: '1rem', 
-                    border: '1px solid var(--border-color)', 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center',
-                    background: 'white',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <div style={{ flex: 1, paddingRight: '0.5rem' }}>
-                    <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700 }}>{template.name}</h4>
-                    <p style={{ margin: '0.15rem 0 0 0', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-                      Version {template.version || 1} • {template.sections?.length || 0} sections
-                    </p>
+              <>
+                <p style={{ margin: '0 0 1.5rem 0', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                  Select a custom diary card template to assign to <strong>{assigningPatient.displayName || 'this patient'}</strong>.
+                </p>
+                {clinicianTemplates.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '2rem 1rem', background: '#f8fafc', borderRadius: '1rem', border: '1px dashed var(--border-color)' }}>
+                    <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.9rem' }}>You haven't created any custom templates yet.</p>
+                    <Link 
+                      to="/builder" 
+                      className="button" 
+                      style={{ textDecoration: 'none', display: 'inline-flex', marginTop: '1rem', padding: '0.5rem 1.2rem', borderRadius: '2rem', fontSize: '0.85rem' }}
+                    >
+                      <Plus size={16} style={{ marginRight: '0.4rem' }} /> Create One Now
+                    </Link>
                   </div>
-                  <button 
-                    onClick={() => handleAssignTemplate(template)}
-                    className="button"
-                    style={{ 
-                      width: 'auto', 
-                      padding: '0.4rem 1rem', 
-                      borderRadius: '2rem', 
-                      fontSize: '0.8rem', 
-                      fontWeight: 600 
-                    }}
-                  >
-                    Assign
-                  </button>
-                </div>
-              ))
+                ) : (
+                  clinicianTemplates.map(template => (
+                    <div 
+                      key={template.id} 
+                      style={{ 
+                        padding: '1rem', 
+                        borderRadius: '1rem', 
+                        border: '1px solid var(--border-color)', 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        background: 'white',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <div style={{ flex: 1, paddingRight: '0.5rem' }}>
+                        <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700 }}>{template.name}</h4>
+                        <p style={{ margin: '0.15rem 0 0 0', color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+                          Version {template.version || 1} • {template.sections?.length || 0} sections
+                        </p>
+                      </div>
+                      <button 
+                        onClick={() => setAssigningTemplate(template)}
+                        className="button"
+                        style={{ 
+                          width: 'auto', 
+                          padding: '0.4rem 1rem', 
+                          borderRadius: '2rem', 
+                          fontSize: '0.8rem', 
+                          fontWeight: 600 
+                        }}
+                      >
+                        Select
+                      </button>
+                    </div>
+                  ))
+                )}
+              </>
             )}
           </div>
           
           {/* Footer */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-            <button 
-              onClick={() => setAssigningPatient(null)} 
-              className="secondary" 
-              style={{ width: 'auto', padding: '0.6rem 1.5rem', borderRadius: '2rem' }}
-            >
-              Cancel
-            </button>
+            {assigningTemplate && (
+              <button 
+                onClick={() => setAssigningTemplate(null)} 
+                className="secondary" 
+                style={{ width: 'auto', padding: '0.6rem 1.5rem', borderRadius: '2rem' }}
+              >
+                Back
+              </button>
+            )}
+            {!assigningTemplate && (
+              <button 
+                onClick={handleCloseModal} 
+                className="secondary" 
+                style={{ width: 'auto', padding: '0.6rem 1.5rem', borderRadius: '2rem' }}
+              >
+                Cancel
+              </button>
+            )}
+            {assigningTemplate && (
+              <button 
+                onClick={handleAssignTemplate} 
+                disabled={emailVerification.trim().toLowerCase() !== assigningPatient.email.trim().toLowerCase()}
+                className="button" 
+                style={{ 
+                  width: 'auto', 
+                  padding: '0.6rem 1.5rem', 
+                  borderRadius: '2rem',
+                  opacity: emailVerification.trim().toLowerCase() !== assigningPatient.email.trim().toLowerCase() ? 0.5 : 1,
+                  cursor: emailVerification.trim().toLowerCase() !== assigningPatient.email.trim().toLowerCase() ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Confirm Assignment
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -454,7 +537,27 @@ function ClinicianPage() {
                               gap: '0.4rem' 
                             }}
                           >
-                            <Edit2 size={16} /> Edit Template
+                            <Edit2 size={16} /> Edit
+                          </Link>
+                          <Link 
+                            to={`/builder?clone=${template.id}`} 
+                            className="secondary" 
+                            style={{ 
+                              flex: 1, 
+                              textDecoration: 'none', 
+                              padding: '0.5rem', 
+                              borderRadius: '2rem', 
+                              fontSize: '0.85rem', 
+                              fontWeight: 600, 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center', 
+                              gap: '0.4rem',
+                              background: 'var(--bg-secondary)',
+                              borderColor: 'var(--border-color)'
+                            }}
+                          >
+                            <ClipboardList size={16} /> Duplicate
                           </Link>
                         </div>
                       </div>
