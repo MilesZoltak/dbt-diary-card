@@ -7,8 +7,6 @@ export default function BottomNav() {
   const { user, profile } = useAuth();
   const location = useLocation();
 
-  if (!user || !profile) return null;
-
   const isActive = (path, searchParams = null) => {
     if (location.pathname !== path) return false;
     if (searchParams) {
@@ -29,21 +27,30 @@ export default function BottomNav() {
         <span>Skills</span>
       </Link>
 
-      <Link to="/journal" className={`nav-item ${isActive('/journal') ? 'active' : ''}`}>
-        <Activity size={24} />
-        <span>Entry</span>
-      </Link>
-      
-      <Link to="/clinician" className={`nav-item ${isActive('/clinician') ? 'active' : ''}`}>
-        <Users size={24} />
-        <span>Dashboard</span>
-      </Link>
-
-      {profile.role === 'clinician' && (
-        <Link to="/clinician?view=patients" className={`nav-item ${isActive('/clinician', { view: 'patients' }) ? 'active' : ''}`}>
-          <ClipboardList size={24} />
-          <span>Patients</span>
+      {(!user || !profile) ? (
+        <Link to="/" className={`nav-item ${isActive('/') ? 'active' : ''}`}>
+          <Users size={24} />
+          <span>Sign In</span>
         </Link>
+      ) : (
+        <>
+          <Link to="/journal" className={`nav-item ${isActive('/journal') ? 'active' : ''}`}>
+            <Activity size={24} />
+            <span>Entry</span>
+          </Link>
+          
+          <Link to="/clinician" className={`nav-item ${isActive('/clinician') ? 'active' : ''}`}>
+            <Users size={24} />
+            <span>Dashboard</span>
+          </Link>
+
+          {profile.role === 'clinician' && (
+            <Link to="/clinician?view=patients" className={`nav-item ${isActive('/clinician', { view: 'patients' }) ? 'active' : ''}`}>
+              <ClipboardList size={24} />
+              <span>Patients</span>
+            </Link>
+          )}
+        </>
       )}
     </nav>
   );

@@ -54,9 +54,14 @@ function LandingPage() {
           <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
             Track your emotions, urges, and skills safely and privately.
           </p>
-          <button onClick={() => login()} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
-            <LogIn size={20} /> Sign in with Google
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <button onClick={() => login()} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
+              <LogIn size={20} /> Sign in with Google
+            </button>
+            <button onClick={() => navigate('/skills')} className="secondary" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', borderColor: 'var(--accent-primary)', color: 'var(--accent-primary)' }}>
+              Practice Skills (Emergency Access)
+            </button>
+          </div>
         </div>
       </div>
     );

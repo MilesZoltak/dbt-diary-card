@@ -10,9 +10,6 @@ export default function SkillsPage() {
   const [selectedSkill, setSelectedSkill] = useState(null);
   const [activeModule, setActiveModule] = useState(dbTSkillsLibrary[0].module);
 
-  if (!user || !profile) {
-    return <Navigate to="/" replace />;
-  }
 
   return (
     <div style={{ maxWidth: '1000px', margin: '0 auto', paddingBottom: '4rem' }}>

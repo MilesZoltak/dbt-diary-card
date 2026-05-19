@@ -13,6 +13,7 @@ function JournalView({
   onSubmit,
   onSaveDraft,
   submitting, 
+  saveStatus = 'idle',
   readOnly = false
 }) {
   const [currentSectionIdx, setCurrentSectionIdx] = React.useState(0);
@@ -35,6 +36,17 @@ function JournalView({
       return () => clearTimeout(timer);
     }
   }, [currentSectionIdx, totalSections]);
+
+  React.useEffect(() => {
+    if (readOnly || !onSaveDraft || Object.keys(form).length === 0) return;
+    if (isSubmitted && !forceEdit) return;
+
+    const timer = setTimeout(() => {
+      onSaveDraft(false); // pass false so the "Saving... -> Saved" indicator correctly appears
+    }, 2500);
+
+    return () => clearTimeout(timer);
+  }, [form, readOnly, isSubmitted, forceEdit]);
 
   const handleMultiSelectChange = (fieldId, option, checked) => {
     if (readOnly) return;
@@ -255,6 +267,23 @@ function JournalView({
         <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Daily Log</h2>
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            
+            {!readOnly && saveStatus !== 'idle' && (
+              <span style={{ 
+                fontSize: '0.75rem', 
+                fontWeight: 600, 
+                color: saveStatus === 'saving' ? 'var(--text-secondary)' : '#16a34a',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+                marginRight: '0.5rem',
+                animation: 'fadeIn 0.2s ease'
+              }}>
+                {saveStatus === 'saving' ? <Loader2 size={12} className="spin" /> : <Check size={12} />}
+                {saveStatus === 'saving' ? 'Saving...' : 'Saved'}
+              </span>
+            )}
+
             <input 
               type="date" 
               value={entryDate} 

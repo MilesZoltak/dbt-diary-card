@@ -20,6 +20,7 @@ function JournalPage() {
   const [patientData, setPatientData] = useState([]);
   const [form, setForm] = useState({});
   const [entryDate, setEntryDate] = useState(getLocalDateString());
+  const [saveStatus, setSaveStatus] = useState('idle'); // 'idle', 'saving', 'saved'
   
   // Sharing state
   const [showLinkModal, setShowLinkModal] = useState(false);
@@ -117,7 +118,20 @@ function JournalPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entryDate, patientData, schema]);
 
-  const handleSaveDraft = async () => {
+  // Listen for the HIPAA Timeout Rescue event
+  useEffect(() => {
+    const handleRescueSave = async () => {
+      if (schema && form && Object.keys(form).length > 0) {
+        console.log('Executing timeout rescue save...');
+        await handleSaveDraft(true); // silent save
+      }
+    };
+    window.addEventListener('hipaa-timeout-rescue', handleRescueSave);
+    return () => window.removeEventListener('hipaa-timeout-rescue', handleRescueSave);
+  }, [schema, form, entryDate]);
+
+  const handleSaveDraft = async (silent = false) => {
+    if (!silent) setSaveStatus('saving');
     try {
       const payload = {
         templateId: schema.id || 'unknown',
@@ -127,8 +141,13 @@ function JournalPage() {
         status: 'draft'
       };
       await FirestoreService.saveDiaryCard(user.uid, entryDate, payload);
+      if (!silent) {
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2500); // clear after 2.5s
+      }
     } catch (err) {
       console.error("Draft auto-save failed:", err);
+      if (!silent) setSaveStatus('idle');
     }
   };
 
@@ -271,6 +290,7 @@ function JournalPage() {
         onSubmit={handlePatientSubmit}
         onSaveDraft={handleSaveDraft}
         submitting={submitting}
+        saveStatus={saveStatus}
       />
 
       {/* LINK MODAL */}
