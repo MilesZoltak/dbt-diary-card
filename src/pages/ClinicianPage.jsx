@@ -72,13 +72,7 @@ function ClinicianPage() {
       setLoading(false);
     }
   };
-    } catch (err) {
-      console.error(err);
-      setError("Failed to assign template: " + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   const loadFirestoreData = async (targetUid) => {
     setLoading(true);
