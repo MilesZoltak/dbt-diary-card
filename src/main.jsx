@@ -11,18 +11,24 @@ import ClinicianPage from './pages/ClinicianPage.jsx'
 import BuilderPage from './pages/BuilderPage.jsx'
 import SkillsPage from './pages/SkillsPage.jsx'
 
+import NotFoundPage from './pages/NotFoundPage.jsx'
+
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'YOUR_CLIENT_ID.apps.googleusercontent.com'
 
 const router = createBrowserRouter([
   {
     path: "/",
     element: <Layout />,
+    errorElement: <NotFoundPage />,
     children: [
       { index: true, element: <LandingPage /> },
       { path: "journal", element: <JournalPage /> },
       { path: "clinician", element: <ClinicianPage /> },
       { path: "builder", element: <BuilderPage /> },
       { path: "skills", element: <SkillsPage /> },
+      { path: "sheet/:sheetId/journal", element: <JournalPage /> },
+      { path: "sheet/:sheetId/clinician", element: <ClinicianPage /> },
+      { path: "sheet/:sheetId/builder", element: <BuilderPage /> }
     ]
   }
 ]);
