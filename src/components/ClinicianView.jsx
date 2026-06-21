@@ -115,9 +115,6 @@ function ClinicianView({ schema, patientData }) {
                                 padding: '0.5rem'
                               }}>
                                 <div>{dateLabel}</div>
-                                {isDraft && (
-                                  <div style={{ fontSize: '0.55rem', fontWeight: 800, color: '#d97706', marginTop: '0.2rem', letterSpacing: '0.05em' }}>[DRAFT]</div>
-                                )}
                               </th>
                             );
                           })}
