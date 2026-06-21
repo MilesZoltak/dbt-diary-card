@@ -107,6 +107,24 @@ function ClinicianView({ schema, patientData }) {
                             </th>
                           ))}
                         </tr>
+                        <tr style={{ background: '#f8fafc' }}>
+                          <th className="sticky-col" style={{ left: 0, background: '#f8fafc', zIndex: 10, textAlign: 'left', fontWeight: 600, fontSize: '0.75rem', padding: '0.5rem', color: 'var(--text-secondary)' }}>Status</th>
+                          {dates.map(date => {
+                            const row = patientData.find(d => normalizeDate(d.logicalDate || d.Date) === date);
+                            const status = row?.status;
+                            return (
+                              <th key={date} style={{ textAlign: 'center', padding: '0.5rem' }}>
+                                {status === 'submitted' ? (
+                                  <span style={{ fontSize: '0.7rem', color: '#16a34a', background: '#f0fdf4', padding: '0.2rem 0.5rem', borderRadius: '1rem', fontWeight: 600 }}>Done</span>
+                                ) : status === 'draft' ? (
+                                  <span style={{ fontSize: '0.7rem', color: '#d97706', background: '#fffbeb', padding: '0.2rem 0.5rem', borderRadius: '1rem', fontWeight: 600 }}>Draft</span>
+                                ) : (
+                                  <span style={{ fontSize: '0.7rem', color: '#94a3b8', background: '#f1f5f9', padding: '0.2rem 0.5rem', borderRadius: '1rem', fontWeight: 600 }}>Missing</span>
+                                )}
+                              </th>
+                            );
+                          })}
+                        </tr>
                       </thead>
                       <tbody>
                         {section.fields.map((field, fIdx) => (
@@ -116,13 +134,22 @@ function ClinicianView({ schema, patientData }) {
                             </th>
                             {dates.map(date => {
                               const row = [...patientData].reverse().find(d => normalizeDate(d.logicalDate || d.Date) === date);
+                              const isDraft = row?.status === 'draft';
                               const val = row?.responses?.[field.id] ?? row?.[field.id];
                               const bgColor = getHeatmapColor(val, field.type, field.config);
                               const textColor = getTextColor(val, field.type, field.config);
                               
                               return (
                                 <td key={date} style={{ padding: 0 }}>
-                                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '3rem', height: '100%', width: '100%' }}>
+                                  <div style={{ 
+                                    display: 'flex', 
+                                    justifyContent: 'center', 
+                                    alignItems: 'center', 
+                                    minHeight: '3rem', 
+                                    height: '100%', 
+                                    width: '100%',
+                                    opacity: isDraft ? 0.75 : 1
+                                  }}>
                                     {field.type === 'text_long' ? (
                                       val ? (
                                         <button 
@@ -148,7 +175,7 @@ function ClinicianView({ schema, patientData }) {
                                       }}>
                                         {val !== undefined && val !== null && val !== '' ? (
                                           field.type === 'boolean' ? (val === true || val === 'TRUE' || val === 'true' || val === 'Yes' || val === 'Y' ? 'Y' : 'N') : val
-                                        ) : ''}
+                                        ) : (row ? '-' : '')}
                                       </div>
                                     )}
                                   </div>

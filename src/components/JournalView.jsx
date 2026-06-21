@@ -14,7 +14,8 @@ function JournalView({
   onSaveDraft,
   submitting, 
   saveStatus = 'idle',
-  readOnly = false
+  readOnly = false,
+  isDirty = false
 }) {
   const [currentSectionIdx, setCurrentSectionIdx] = React.useState(0);
   const [forceEdit, setForceEdit] = React.useState(false);
@@ -40,13 +41,14 @@ function JournalView({
   React.useEffect(() => {
     if (readOnly || !onSaveDraft || Object.keys(form).length === 0) return;
     if (isSubmitted && !forceEdit) return;
+    if (!isDirty) return; // Guard against auto-saving if not dirty!
 
     const timer = setTimeout(() => {
       onSaveDraft(false); // pass false so the "Saving... -> Saved" indicator correctly appears
     }, 2500);
 
     return () => clearTimeout(timer);
-  }, [form, readOnly, isSubmitted, forceEdit]);
+  }, [form, readOnly, isSubmitted, forceEdit, isDirty]);
 
   const handleMultiSelectChange = (fieldId, option, checked) => {
     if (readOnly) return;
@@ -122,7 +124,7 @@ function JournalView({
                   min={min} 
                   max={max} 
                   list={listId}
-                  value={value !== undefined ? value : start} 
+                  value={value !== undefined && value !== null ? value : start} 
                   onChange={e => !readOnly && setForm({...form, [field.id]: parseInt(e.target.value)})} 
                   disabled={readOnly}
                   style={{ width: '100%', margin: 0, cursor: readOnly ? 'default' : 'pointer', position: 'relative', zIndex: 1, background: 'transparent' }} 
@@ -131,8 +133,8 @@ function JournalView({
               <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', width: '1rem', textAlign: 'left' }}>
                 {max}
               </span>
-              <span style={{ minWidth: '1.5rem', textAlign: 'right', fontWeight: 600, fontSize: '1.1rem', color: 'var(--accent-purple)' }}>
-                {value !== undefined ? value : start}
+              <span style={{ minWidth: '1.5rem', textAlign: 'right', fontWeight: 600, fontSize: '1.1rem', color: value !== undefined && value !== null ? 'var(--accent-purple)' : 'var(--text-secondary)' }}>
+                {value !== undefined && value !== null ? value : '-'}
               </span>
             </div>
           </div>
@@ -234,7 +236,9 @@ function JournalView({
             const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
             const dayNum = dateObj.getDate();
             const isSelected = entryDate === dStr;
-            const hasData = patientData.some(d => normalizeDate(d.logicalDate || d.Date) === dStr);
+            const dayEntry = patientData.find(d => normalizeDate(d.logicalDate || d.Date) === dStr);
+            const isSubmitted = dayEntry?.status === 'submitted';
+            const isDraft = dayEntry?.status === 'draft';
 
             return (
               <div 
@@ -253,10 +257,26 @@ function JournalView({
                 <div style={{ fontSize: '0.65rem', fontWeight: 600, opacity: isSelected ? 0.9 : 0.7 }}>{dayName}</div>
                 <div style={{ fontSize: '1.1rem', fontWeight: 800, margin: '0.2rem 0' }}>{dayNum}</div>
                 <div style={{ 
-                  height: '4px', width: '4px', borderRadius: '50%', 
-                  background: hasData ? (isSelected ? 'white' : 'var(--accent-purple)') : 'transparent', 
-                  margin: '0 auto' 
-                }}></div>
+                  height: '7px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  margin: '0.2rem auto 0'
+                }}>
+                  {isSubmitted && (
+                    <div style={{ 
+                      height: '5px', width: '5px', borderRadius: '50%', 
+                      background: isSelected ? 'white' : 'var(--accent-purple)'
+                    }} />
+                  )}
+                  {isDraft && (
+                    <div style={{ 
+                      height: '3px', width: '3px', borderRadius: '50%', 
+                      border: `1.5px solid ${isSelected ? 'white' : 'var(--accent-purple)'}`,
+                      background: 'transparent'
+                    }} />
+                  )}
+                </div>
               </div>
             );
           })}

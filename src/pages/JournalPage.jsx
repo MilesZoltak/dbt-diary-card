@@ -19,6 +19,7 @@ function JournalPage() {
   const [schema, setSchema] = useState([]);
   const [patientData, setPatientData] = useState([]);
   const [form, setForm] = useState({});
+  const [isDirty, setIsDirty] = useState(false);
   const [entryDate, setEntryDate] = useState(getLocalDateString());
   const [saveStatus, setSaveStatus] = useState('idle'); // 'idle', 'saving', 'saved'
   
@@ -35,6 +36,12 @@ function JournalPage() {
     } else {
       setForm({});
     }
+    setIsDirty(false);
+  };
+
+  const handleFormChange = (newFormValOrFn) => {
+    setIsDirty(true);
+    setForm(newFormValOrFn);
   };
 
   const loadFirestoreData = async () => {
@@ -115,8 +122,32 @@ function JournalPage() {
     } else {
       resetForm();
     }
+    setIsDirty(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entryDate, patientData, schema]);
+
+  const handleSaveDraft = async (silent = false) => {
+    if (!isDirty) return; // Guard against saving if not dirty!
+    if (!silent) setSaveStatus('saving');
+    try {
+      const payload = {
+        templateId: schema.id || 'unknown',
+        templateVersion: schema.version || 1,
+        schemaSnapshot: schema,
+        responses: form,
+        status: 'draft'
+      };
+      await FirestoreService.saveDiaryCard(user.uid, entryDate, payload);
+      setIsDirty(false);
+      if (!silent) {
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 2500); // clear after 2.5s
+      }
+    } catch (err) {
+      console.error("Draft auto-save failed:", err);
+      if (!silent) setSaveStatus('idle');
+    }
+  };
 
   // Listen for the HIPAA Timeout Rescue event
   useEffect(() => {
@@ -130,27 +161,6 @@ function JournalPage() {
     return () => window.removeEventListener('hipaa-timeout-rescue', handleRescueSave);
   }, [schema, form, entryDate]);
 
-  const handleSaveDraft = async (silent = false) => {
-    if (!silent) setSaveStatus('saving');
-    try {
-      const payload = {
-        templateId: schema.id || 'unknown',
-        templateVersion: schema.version || 1,
-        schemaSnapshot: schema,
-        responses: form,
-        status: 'draft'
-      };
-      await FirestoreService.saveDiaryCard(user.uid, entryDate, payload);
-      if (!silent) {
-        setSaveStatus('saved');
-        setTimeout(() => setSaveStatus('idle'), 2500); // clear after 2.5s
-      }
-    } catch (err) {
-      console.error("Draft auto-save failed:", err);
-      if (!silent) setSaveStatus('idle');
-    }
-  };
-
   const handlePatientSubmit = async () => {
     setSubmitting(true);
     try {
@@ -163,7 +173,7 @@ function JournalPage() {
       };
       
       await FirestoreService.saveDiaryCard(user.uid, entryDate, payload);
-      
+      setIsDirty(false);
       const newEntries = await FirestoreService.fetchDiaryCards(user.uid);
       setPatientData(newEntries);
     } catch (err) {
@@ -284,13 +294,14 @@ function JournalPage() {
         schema={schema?.sections || []}
         patientData={patientData}
         form={form}
-        setForm={setForm}
+        setForm={handleFormChange}
         entryDate={entryDate}
         setEntryDate={setEntryDate}
         onSubmit={handlePatientSubmit}
         onSaveDraft={handleSaveDraft}
         submitting={submitting}
         saveStatus={saveStatus}
+        isDirty={isDirty}
       />
 
       {/* LINK MODAL */}

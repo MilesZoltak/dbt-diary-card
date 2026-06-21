@@ -13,7 +13,7 @@ class SchemaService {
     template.sections.forEach(section => {
       section.fields.forEach(f => {
         if (f.type === 'scale') {
-          defaults[f.id] = f.config?.start !== undefined ? f.config.start : (f.config?.min || 0);
+          defaults[f.id] = null;
         } else if (f.type === 'boolean') {
           defaults[f.id] = false;
         } else if (f.type === 'multi_select') {
