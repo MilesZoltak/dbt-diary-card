@@ -20,6 +20,7 @@ function JournalPage() {
   const [patientData, setPatientData] = useState([]);
   const [form, setForm] = useState({});
   const [isDirty, setIsDirty] = useState(false);
+  const [currentSectionIdx, setCurrentSectionIdx] = useState(0);
   const [entryDate, setEntryDate] = useState(getLocalDateString());
   const [saveStatus, setSaveStatus] = useState('idle'); // 'idle', 'saving', 'saved'
   
@@ -30,12 +31,8 @@ function JournalPage() {
   const [linkSuccess, setLinkSuccess] = useState(false);
   const [sharedWithList, setSharedWithList] = useState([]);
 
-  const resetForm = (currentSchema = schema) => {
-    if (currentSchema && currentSchema.sections) {
-      setForm(SchemaService.generateDefaultResponses(currentSchema));
-    } else {
-      setForm({});
-    }
+  const resetForm = () => {
+    setForm({});
     setIsDirty(false);
   };
 
@@ -108,8 +105,7 @@ function JournalPage() {
       const entry = [...patientData].reverse().find(d => normalizeDate(d.logicalDate || d.Date) === entryDate);
       
       if (entry) {
-        // We use the entry's responses, mapping to the active schema's defaults for missing fields
-        const loadedForm = SchemaService.generateDefaultResponses(schema);
+        const loadedForm = {};
         if (entry.responses) {
           Object.keys(entry.responses).forEach(key => {
             loadedForm[key] = entry.responses[key];
@@ -123,6 +119,7 @@ function JournalPage() {
       resetForm();
     }
     setIsDirty(false);
+    setCurrentSectionIdx(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entryDate, patientData, schema]);
 
@@ -130,15 +127,24 @@ function JournalPage() {
     if (!isDirty) return; // Guard against saving if not dirty!
     if (!silent) setSaveStatus('saving');
     try {
+      const currentEntry = patientData.find(d => normalizeDate(d.logicalDate || d.Date) === entryDate);
+      const prevMax = currentEntry?.maxSectionReached ?? 0;
+      const newMax = Math.max(prevMax, currentSectionIdx);
+
       const payload = {
         templateId: schema.id || 'unknown',
         templateVersion: schema.version || 1,
         schemaSnapshot: schema,
         responses: form,
-        status: 'draft'
+        status: 'draft',
+        maxSectionReached: newMax
       };
       await FirestoreService.saveDiaryCard(user.uid, entryDate, payload);
       setIsDirty(false);
+
+      const newEntries = await FirestoreService.fetchDiaryCards(user.uid);
+      setPatientData(newEntries);
+
       if (!silent) {
         setSaveStatus('saved');
         setTimeout(() => setSaveStatus('idle'), 2500); // clear after 2.5s
@@ -302,6 +308,8 @@ function JournalPage() {
         submitting={submitting}
         saveStatus={saveStatus}
         isDirty={isDirty}
+        currentSectionIdx={currentSectionIdx}
+        setCurrentSectionIdx={setCurrentSectionIdx}
       />
 
       {/* LINK MODAL */}

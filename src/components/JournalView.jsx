@@ -15,9 +15,10 @@ function JournalView({
   submitting, 
   saveStatus = 'idle',
   readOnly = false,
-  isDirty = false
+  isDirty = false,
+  currentSectionIdx,
+  setCurrentSectionIdx
 }) {
-  const [currentSectionIdx, setCurrentSectionIdx] = React.useState(0);
   const [forceEdit, setForceEdit] = React.useState(false);
   const [canSubmit, setCanSubmit] = React.useState(false);
   const totalSections = schema.length;
@@ -74,10 +75,6 @@ function JournalView({
   };
 
   const last7Days = getLast7Days();
-
-  React.useEffect(() => {
-    setCurrentSectionIdx(0);
-  }, [entryDate]);
 
   const renderField = (field) => {
     const value = form[field.id];

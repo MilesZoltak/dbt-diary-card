@@ -101,25 +101,22 @@ function ClinicianView({ schema, patientData }) {
                       <thead>
                         <tr>
                           <th className="sticky-col" style={{ left: 0, background: 'white', zIndex: 10, minWidth: '120px', padding: '0.5rem' }}>Field</th>
-                          {dates.map(date => (
-                            <th key={date} style={{ minWidth: '3.5rem', textAlign: 'center', fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-                              {new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' })}
-                            </th>
-                          ))}
-                        </tr>
-                        <tr style={{ background: '#f8fafc' }}>
-                          <th className="sticky-col" style={{ left: 0, background: '#f8fafc', zIndex: 10, textAlign: 'left', fontWeight: 600, fontSize: '0.75rem', padding: '0.5rem', color: 'var(--text-secondary)' }}>Status</th>
                           {dates.map(date => {
                             const row = patientData.find(d => normalizeDate(d.logicalDate || d.Date) === date);
-                            const status = row?.status;
+                            const isDraft = row?.status === 'draft';
+                            const dateLabel = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
                             return (
-                              <th key={date} style={{ textAlign: 'center', padding: '0.5rem' }}>
-                                {status === 'submitted' ? (
-                                  <span style={{ fontSize: '0.7rem', color: '#16a34a', background: '#f0fdf4', padding: '0.2rem 0.5rem', borderRadius: '1rem', fontWeight: 600 }}>Done</span>
-                                ) : status === 'draft' ? (
-                                  <span style={{ fontSize: '0.7rem', color: '#d97706', background: '#fffbeb', padding: '0.2rem 0.5rem', borderRadius: '1rem', fontWeight: 600 }}>Draft</span>
-                                ) : (
-                                  <span style={{ fontSize: '0.7rem', color: '#94a3b8', background: '#f1f5f9', padding: '0.2rem 0.5rem', borderRadius: '1rem', fontWeight: 600 }}>Missing</span>
+                              <th key={date} style={{ 
+                                minWidth: '3.5rem', 
+                                textAlign: 'center', 
+                                fontSize: '0.7rem', 
+                                color: isDraft ? '#d97706' : 'var(--text-secondary)', 
+                                textTransform: 'uppercase',
+                                padding: '0.5rem'
+                              }}>
+                                <div>{dateLabel}</div>
+                                {isDraft && (
+                                  <div style={{ fontSize: '0.55rem', fontWeight: 800, color: '#d97706', marginTop: '0.2rem', letterSpacing: '0.05em' }}>[DRAFT]</div>
                                 )}
                               </th>
                             );
@@ -135,9 +132,14 @@ function ClinicianView({ schema, patientData }) {
                             {dates.map(date => {
                               const row = [...patientData].reverse().find(d => normalizeDate(d.logicalDate || d.Date) === date);
                               const isDraft = row?.status === 'draft';
+                              const maxReached = row?.maxSectionReached ?? 0;
+                              const isReached = !isDraft || sIdx <= maxReached;
+                              
                               const val = row?.responses?.[field.id] ?? row?.[field.id];
-                              const bgColor = getHeatmapColor(val, field.type, field.config);
-                              const textColor = getTextColor(val, field.type, field.config);
+                              const displayVal = isReached ? val : undefined;
+                              
+                              const bgColor = getHeatmapColor(displayVal, field.type, field.config);
+                              const textColor = getTextColor(displayVal, field.type, field.config);
                               
                               return (
                                 <td key={date} style={{ padding: 0 }}>
@@ -173,9 +175,9 @@ function ClinicianView({ schema, patientData }) {
                                         alignItems: 'center',
                                         justifyContent: 'center'
                                       }}>
-                                        {val !== undefined && val !== null && val !== '' ? (
-                                          field.type === 'boolean' ? (val === true || val === 'TRUE' || val === 'true' || val === 'Yes' || val === 'Y' ? 'Y' : 'N') : val
-                                        ) : (row ? '-' : '')}
+                                        {displayVal !== undefined && displayVal !== null && displayVal !== '' ? (
+                                          field.type === 'boolean' ? (displayVal === true || displayVal === 'TRUE' || displayVal === 'true' || displayVal === 'Yes' || displayVal === 'Y' ? 'Y' : 'N') : displayVal
+                                        ) : (row ? (isReached ? (field.type === 'boolean' ? 'N' : '-') : '') : '')}
                                       </div>
                                     )}
                                   </div>
