@@ -99,8 +99,10 @@ function JournalPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, profile]);
 
-  // Load existing data into form when date changes
+  // Load existing data into form when date changes or data arrives
   useEffect(() => {
+    if (isDirty) return; // Do not overwrite active user edits!
+    
     if (patientData.length > 0 && schema?.sections?.length > 0) {
       const entry = [...patientData].reverse().find(d => normalizeDate(d.logicalDate || d.Date) === entryDate);
       
@@ -119,9 +121,13 @@ function JournalPage() {
       resetForm();
     }
     setIsDirty(false);
-    setCurrentSectionIdx(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entryDate, patientData, schema]);
+
+  // Reset section index when date changes
+  useEffect(() => {
+    setCurrentSectionIdx(0);
+  }, [entryDate]);
 
   const handleSaveDraft = async (silent = false) => {
     if (!isDirty) return; // Guard against saving if not dirty!
